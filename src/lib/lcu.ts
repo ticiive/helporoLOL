@@ -3,7 +3,7 @@
  * Converte a sessão da seleção de campeões no formato de Draft do motor.
  */
 import { invoke } from "@tauri-apps/api/core";
-import { BOTS, JUNGLERS, SUPPORTS, TOPS } from "../engine/champions";
+import { BOTS, JUNGLERS, MIDS, SUPPORTS, TOPS } from "../engine/champions";
 import { ROLES, type Role, type Team } from "../engine/engine";
 import type { Catalog } from "./ddragon";
 import { OWNER, type Game } from "./stats";
@@ -21,17 +21,30 @@ export type LiveState = { status: "offline" | "idle" } | { status: "active"; dra
 const POS: Record<string, Role> = { top: "top", jungle: "jg", middle: "mid", bottom: "adc", utility: "sup" };
 const empty = (): Team => ({ top: null, jg: null, mid: null, adc: null, sup: null });
 
-/** Adivinha a rota de cada inimigo quando o cliente não informa (ranqueada esconde). */
-export function assignRoles(names: string[]): Team {
+const SETS: [Role, Set<string>][] = [["top", TOPS], ["jg", JUNGLERS], ["mid", MIDS], ["adc", BOTS], ["sup", SUPPORTS]];
+const rolesOf = (n: string | null) => (n ? SETS.filter(([, set]) => set.has(n)).map(([r]) => r) : []);
+
+/**
+ * Adivinha a rota de cada inimigo (a ranqueada esconde). Pontua cada combinação possível:
+ * +2 se o campeão costuma ir naquela rota, +1 se o jogador baniu um campeão daquela rota
+ * (quem bane costuma banir o que encontraria na própria lane).
+ */
+export function assignRoles(players: { name: string | null; ban?: string | null }[]): Team {
   const t = empty();
-  const left = [...names];
-  const take = (role: Role, set: Set<string>) => {
-    if (t[role]) return;
-    const i = left.findIndex((n) => set.has(n));
-    if (i >= 0) t[role] = left.splice(i, 1)[0];
+  const ps = players.filter((p) => p.name || p.ban).slice(0, 5);
+  const score = (p: { name: string | null; ban?: string | null }, r: Role) =>
+    (rolesOf(p.name).includes(r) ? 2 : 0) + (rolesOf(p.ban ?? null).includes(r) ? 1 : 0);
+  let best: Role[] = [], bestScore = -1;
+  const perm = (left: Role[], acc: Role[]) => {
+    if (acc.length === ps.length) {
+      const sc = acc.reduce((a, r, i) => a + score(ps[i], r), 0);
+      if (sc > bestScore) { bestScore = sc; best = acc; }
+      return;
+    }
+    left.forEach((r, i) => perm([...left.slice(0, i), ...left.slice(i + 1)], [...acc, r]));
   };
-  take("sup", SUPPORTS); take("adc", BOTS); take("jg", JUNGLERS); take("top", TOPS);
-  for (const r of ROLES) if (!t[r] && left.length) t[r] = left.shift()!;
+  perm([...ROLES], []);
+  ps.forEach((p, i) => { if (p.name) t[best[i]] = p.name; });
   return t;
 }
 
@@ -54,11 +67,13 @@ export async function readChampSelect(cat: Catalog): Promise<LiveState> {
   for (const r of ROLES) if (r !== mine && !ally[r] && unplaced.length) ally[r] = unplaced.shift()!;
   ally[mine] = null; // esse slot é o seu
 
-  const enemyNames = s.theirTeam.map((c) => nameOf(c.championId)).filter(Boolean) as string[];
+  // ban de cada jogador inimigo, pelo dono da ação de ban
+  const banBy = new Map<number, number>();
+  (s.actions ?? []).flat().forEach((a) => { if (a.type === "ban" && a.completed && a.championId > 0) banBy.set(a.actorCellId, a.championId); });
   const enemyHasPos = s.theirTeam.some((c) => POS[c.assignedPosition ?? ""]);
   let enemy = empty();
   if (enemyHasPos) s.theirTeam.forEach((c) => { const r = POS[c.assignedPosition ?? ""], n = nameOf(c.championId); if (r && n) enemy[r] = n; });
-  else enemy = assignRoles(enemyNames);
+  else enemy = assignRoles(s.theirTeam.map((c) => ({ name: nameOf(c.championId), ban: nameOf(banBy.get(c.cellId)) })));
 
   const banIds = new Set<number>([...(s.bans?.myTeamBans ?? []), ...(s.bans?.theirTeamBans ?? [])]);
   (s.actions ?? []).flat().forEach((a) => { if (a.type === "ban" && a.completed && a.championId > 0) banIds.add(a.championId); });
