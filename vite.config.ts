@@ -4,6 +4,7 @@ import react from "@vitejs/plugin-react";
 // Tauri espera uma porta fixa no dev
 export default defineConfig({
   plugins: [react()],
+  base: "./", // caminhos relativos: funciona no app e no GitHub Pages (/helporoLOL/)
   clearScreen: false,
   server: { port: 1420, strictPort: true },
   // No Windows o app roda no WebView2 (Chromium)
