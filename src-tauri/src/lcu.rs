@@ -120,3 +120,9 @@ pub async fn match_history(beg: u32, end: u32) -> Result<Option<serde_json::Valu
     let path = format!("/lol-match-history/v1/products/lol/current-summoner/matches?begIndex={beg}&endIndex={end}");
     Ok(get(&path).await?.and_then(|r| r.ok()))
 }
+
+/// Fase do cliente: "ChampSelect", "InProgress" (em partida), "Lobby", "None"...
+#[tauri::command]
+pub async fn gameflow_phase() -> Result<Option<String>, String> {
+    Ok(get("/lol-gameflow/v1/gameflow-phase").await?.and_then(|r| r.ok()).and_then(|v| v.as_str().map(String::from)))
+}

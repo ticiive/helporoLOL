@@ -48,3 +48,20 @@ export const LANE: Record<SupKey, Record<string, number>> = {
   lulu: { Thresh: -1, Braum: -1, Leona: -1, Xerath: -1, Brand: -1, Zyra: -1, Morgana: 1 },
   milio: { Blitzcrank: -1, "Vel'Koz": -1, Xerath: -1, Brand: -1, Zyra: -1, Leona: -1 },
 };
+
+/**
+ * Sinergia com o ADC aliado: winrate do SEU sup jogando junto com cada ADC
+ * (op.gg, patch 16.20/16.21, Esmeralda+, todos os servidores). "ADC:wr:jogos".
+ * O motor compara com o winrate médio do sup e puxa pro meio quando há poucos jogos.
+ */
+const RAW_SYN: Record<SupKey, string> = {
+  soraka: "Kai'Sa:48.04:993,Jinx:49.55:989,Jhin:52.30:977,Ezreal:49.23:776,Caitlyn:50.49:721,Aphelios:45.86:580,Yunara:47.27:531,Tristana:55.96:495,Miss Fortune:48.91:458,Smolder:50.72:418",
+  sona: "Ezreal:49.68:6576,Kai'Sa:49.66:5977,Caitlyn:49.9:4908,Jhin:50.08:4780,Seraphine:53.93:3881,Jinx:51.42:3798,Miss Fortune:50.46:2931,Lucian:52.06:2789,Smolder:52.67:2601,Sivir:51.71:2398",
+  nami: "Lucian:49.14:22521,Jinx:52.65:11183,Caitlyn:49.55:9710,Jhin:50.77:9576,Kai'Sa:51.41:9529,Yunara:49.26:8395,Tristana:53.55:7729,Ezreal:49.33:6823,Twitch:52.17:4269,Smolder:51.36:3614",
+  janna: "Jhin:53.05:1297,Kai'Sa:52.44:1047,Jinx:53.29:1032,Caitlyn:49.64:834,Ezreal:47.48:813,Yunara:52.50:619,Miss Fortune:51.41:605,Aphelios:47.89:522,Tristana:50.39:514,Draven:53.49:501",
+  lulu: "Jinx:52.19:13055,Yunara:51.14:10934,Kai'Sa:47.79:7014,Twitch:52.57:6487,Zeri:52.34:4232,Vayne:52.66:4195,Aphelios:48.89:4134,Kog'Maw:52.8:3977,Tristana:53.99:3764,Caitlyn:48.65:3011",
+  milio: "Lucian:48.43:3640,Jinx:53.00:2070,Caitlyn:49.96:1145,Yunara:49.70:990,Aphelios:50.51:875,Kai'Sa:46.42:866,Twitch:52.70:647,Jhin:49.91:567,Tristana:51.03:535,Ashe:53.40:530",
+};
+export const SYN_ADC: Record<SupKey, Record<string, Matchup>> = Object.fromEntries(
+  SUP_KEYS.map((k) => [k, Object.fromEntries(RAW_SYN[k].split(",").map((s) => { const [n, w, g] = s.split(":"); return [n, { wr: +w, n: +g }]; }))]),
+) as Record<SupKey, Record<string, Matchup>>;

@@ -1,0 +1,74 @@
+name: Coletar partidas e treinar o modelo
+
+# Roda todo dia às 4h (Brasília) e pode ser disparado à mão na aba Actions.
+# Precisa do segredo RIOT_API_KEY (Settings -> Secrets and variables -> Actions).
+# Os dados e o modelo ficam na branch "data", que é refeita a cada rodada.
+on:
+  schedule:
+    - cron: "0 7 * * *"
+  workflow_dispatch:
+    inputs:
+      horas:
+        description: "Horas de coleta nesta rodada"
+        default: "4.5"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: modelo
+  cancel-in-progress: false
+
+jobs:
+  coletar-e-treinar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install numpy
+
+      - name: Recupera os dados das rodadas anteriores
+        run: |
+          mkdir -p model/data model/out
+          if git ls-remote --exit-code origin data >/dev/null; then
+            git fetch --depth 1 origin data
+            git archive FETCH_HEAD model/data model/out | tar -x || true
+          fi
+          ls -la model/data || true
+
+      - name: Coleta partidas (Mestre+ e Diamante 1, BR)
+        env:
+          RIOT_API_KEY: ${{ secrets.RIOT_API_KEY }}
+        run: python model/collect.py --d1 --hours "${{ github.event.inputs.horas || '4.5' }}"
+
+      - name: Treina
+        working-directory: model
+        run: python train.py
+
+      - name: Salva dados e modelo na branch data
+        if: always()
+        run: |
+          set -e
+          D=$(mktemp -d)
+          mkdir -p "$D/model"
+          cp -r model/data model/out "$D/model/" 2>/dev/null || true
+          cd "$D"
+          git init -q -b data
+          git config user.name "helporoLOL bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add -A
+          git commit -qm "Dados e modelo $(date -u +%F)"
+          git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}" data
+
+      - name: Relatório no resumo da rodada
+        if: always()
+        run: cat model/out/report.md >> "$GITHUB_STEP_SUMMARY" || true
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: modelo
+          path: model/out

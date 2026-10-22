@@ -28,8 +28,8 @@ function useStored<T extends object>(key: string, init: T) {
 export default function App() {
   const [cat, setCat] = useState<Catalog>(offlineCatalog);
   const [catErr, setCatErr] = useState(false);
-  const [draft, setDraft] = useState<Draft>(EXAMPLE);
-  const [settings, setSettings] = useStored<Settings>("helporo.settings3", { weights: DEFAULT_WEIGHTS, pool: DEFAULT_POOL, focus: [], lane: {}, backups: ["Sona", "Nami"], main: "Soraka", mainTolerance: 2, mainAvoid: ["Jarvan IV", "Rengar", "Nocturne"], mainWarn: ["Vi", "Malphite", "Warwick", "Skarner", "Hecarim", "Zac", "Kha'Zix", "Evelynn", "Fiddlesticks", "Kayn", "Qiyana", "Diana"] });
+  const [draft, setDraft] = useState<Draft>(() => ({ ally: empty(), enemy: empty(), bans: [] }));
+  const [settings, setSettings] = useStored<Settings>("helporo.settings6", { weights: DEFAULT_WEIGHTS, pool: DEFAULT_POOL, focus: [], lane: {}, backups: ["Sona", "Nami"], main: "Soraka", mainTolerance: 2, mainNoBlind: true, mainAvoid: ["Jarvan IV", "Rengar", "Nocturne"], mainWarn: ["Vi", "Malphite", "Warwick", "Skarner", "Hecarim", "Zac", "Kha'Zix", "Evelynn", "Fiddlesticks", "Kayn", "Qiyana", "Diana"] });
   const [ui, setUi] = useStored("helporo.ui", { follow: true, role: "sup" as Role });
   const [live, setLive] = useState<LiveState | null>(null);
   const [banText, setBanText] = useState("");
@@ -43,6 +43,12 @@ export default function App() {
 
   useEffect(() => { loadCatalog().then(setCat).catch(() => setCatErr(true)); }, []);
   const [timerUrl, setTimerUrl] = useState("");
+  const [phase, setPhase] = useState<string | null>(null);
+  useEffect(() => {
+    if (!inTauri()) return;
+    const tick = () => invoke<string | null>("gameflow_phase").then(setPhase).catch(() => setPhase(null));
+    tick(); const id = setInterval(tick, 5000); return () => clearInterval(id);
+  }, []);
   useEffect(() => { if (inTauri()) invoke<string>("timer_url").then(setTimerUrl).catch(() => {}); }, []);
 
   // Seleção de campeões: lê o cliente a cada 1,5 s
@@ -106,6 +112,7 @@ export default function App() {
 
   const liveLabel = !inTauri() ? null
     : live?.status === "active" ? (following ? "Seguindo a seleção do cliente" : "Seleção detectada (pausado)")
+    : phase === "InProgress" ? "Em partida: mostrando o draft da seleção"
     : live?.status === "idle" ? "Cliente aberto, fora da seleção" : "Cliente do LoL fechado";
 
   return (
@@ -124,6 +131,17 @@ export default function App() {
         </div>
       </header>
 
+      {!inTauri() && (
+        <div className="banner">
+          <b>Versão web, modo manual.</b> Ela não lê o cliente nem a partida: preencha o draft à mão. Pra seguir a seleção sozinho, use o app no Windows.
+          Durante a partida, use o timer pelo endereço que o app mostra no topo (tipo <code>http://192.168.0.10:7777</code>).
+        </div>
+      )}
+      {inTauri() && phase === "InProgress" && (
+        <div className="banner">
+          <b>Você está em partida.</b> O draft da seleção fica aqui. Pro timer de feitiços, abra no Mac ou no celular: <code>{timerUrl || "http://IP-do-PC:7777"}</code>
+        </div>
+      )}
       <div className="roles" role="group" aria-label="Sua rota">
         <span className="lbl">Sua rota</span>
         {ROLES.map((r) => (

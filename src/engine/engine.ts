@@ -1,4 +1,4 @@
-import { LANE, META, MU, SUPS, SUP_KEYS, type SupKey } from "./data";
+import { LANE, META, MU, SUPS, SUP_KEYS, SYN_ADC, type SupKey } from "./data";
 import type { Stats } from "../lib/stats";
 import { BOTS, JUNGLERS, MIDS, SUPPORTS, TOPS } from "./champions";
 
@@ -31,6 +31,8 @@ export interface Settings {
   mainWarn: string[];
   /** reservas em ordem de preferência, testadas com a mesma regra quando a main é evitada */
   backups: string[];
+  /** sup (e de preferência ADC) inimigo tem que estar revelado pra sugerir a main */
+  mainNoBlind: boolean;
   /** correções de lane: chave `${sup}|${inimigo}` */
   lane: Record<string, number>;
 }
@@ -57,7 +59,9 @@ const THREAT: Record<string, [Record<SupKey, number>, string]> = {
   D: [S(-1.2, -0.8, 0.6, 1.2, 1, 0.4), "dive"],
   X: [S(-1.2, -1.2, -0.3, 0.3, 1.2, 0), "assassinos/burst"],
   H: [S(-0.6, -0.6, -0.2, 0.2, 0, 0.6), "pick/hook no mapa"],
-  K: [S(1, 0, -0.3, 0.3, 0, 0.6), "poke"],
+  K: [S(1, 0, -0.3, 0.3, 0, 0.6), "poke de desgaste"],
+  // magos de artilharia (Xerath, Vel'Koz, Lux, Ziggs...) matam de longe quem não tem mobilidade
+  L: [S(-0.5, -0.4, -0.1, 0, 0, 0.1), "mago de artilharia"],
   W: [S(0.3, 0.8, 0.3, 0.4, 0, 0.3), "teamfight AoE"],
   N: [S(0, 0, -0.8, 0, 0, 0), "spell shield"],
 };
@@ -213,16 +217,28 @@ export function decide(d: Draft, s: Settings, flags: Flags, stats: Stats, myRole
     }
 
     for (const [t, [w, label]] of Object.entries(THREAT)) {
-      const pool = t === "H" ? enemyNonSup : enemies;
-      const c = Math.min(3, pool.filter((n) => hf(n, t)).length);
+      const pool = t === "H" || t === "L" ? enemyNonSup : enemies;
+      // artilharia não conta como "poke de desgaste" (esse é o que a cura anula)
+      const c = Math.min(3, pool.filter((n) => hf(n, t) && !(t === "K" && hf(n, "L"))).length);
       if (c) add("comp", (k ? w[k] : genericThreat(t, fl)) * c, `inimigo com ${label}${c > 1 ? ` (${c})` : ""}`);
     }
     if (k && enemies.filter((n) => hf(n, "M")).length >= 3) add("comp", MELEE3[k], "muitos melee no inimigo");
     gaps.forEach((g) => add("comp", k ? GAP[g][k] : genericGap(g, fl), GAP_LABEL[g]));
 
     if (isSup && A.adc) {
-      if (hf(A.adc, "Y")) add("adc", k ? SYN.Y[k] : has(fl, "R") ? 0.8 : 0, `${A.adc} hipercarry`);
-      if (hf(A.adc, "G")) add("adc", k ? SYN.G[k] : has(fl, "E") || has(fl, "G") ? 0.8 : -0.3, `${A.adc} quer lane agressiva`);
+      const syn = k ? SYN_ADC[k][A.adc] : undefined;
+      if (syn && k) {
+        // dado real da dupla, comparado com o winrate médio do sup
+        const d = ((syn.wr - META[k].wr) * syn.n) / (syn.n + 800);
+        add("adc", d * 0.5, `com ${A.adc}: ${syn.wr.toFixed(1)}% juntos (${syn.n.toLocaleString("pt-BR")} jogos)`, 0.3);
+      } else {
+        if (hf(A.adc, "Y")) add("adc", k ? SYN.Y[k] : has(fl, "R") ? 0.8 : 0, `${A.adc} hipercarry`);
+        if (hf(A.adc, "G")) add("adc", k ? SYN.G[k] : has(fl, "E") || has(fl, "G") ? 0.8 : -0.3, `${A.adc} quer lane agressiva`);
+      }
+      // Nilah amplifica cura e escudo que recebe: ótima com encantador de cura
+      if (k && A.adc === "Nilah") add("adc", ({ soraka: 1.5, sona: 0.8, nami: 0.8, janna: 0.5, lulu: 0.5, milio: 1 } as Record<SupKey, number>)[k], "Nilah amplifica a sua cura");
+      // ADC que mergulha (Kai'Sa, Samira...) sai do alcance de quem só cura de trás
+      if (k && hf(A.adc, "D")) add("adc", ({ soraka: -0.8, sona: -0.4, nami: 0.3, janna: 0, lulu: 0.5, milio: 0.3 } as Record<SupKey, number>)[k], `${A.adc} mergulha e sai do seu alcance`);
     }
     if (k) { const m = META[k]; add("meta", (TIER[m.tier] ?? 0) + (m.wr - 52) * 0.5, `meta: tier ${m.tier}, ${m.wr}% WR`); }
 
@@ -250,7 +266,9 @@ export function decide(d: Draft, s: Settings, flags: Flags, stats: Stats, myRole
 
     const score = (Object.keys(f) as Factor[]).reduce((a, x) => a + f[x] * s.weights[x], 0);
     const status = d.bans.includes(name) ? "banned" : taken.has(name) ? "picked" : "ok";
-    const situation = 1.5 * f.lane * s.weights.lane + f.dados * s.weights.dados + f.comp * s.weights.comp + f.adc * s.weights.adc + 0.5 * f.blind * s.weights.blind;
+    // winrate de jogo bom não salva uma lane que você sabe que é ruim
+    const dadosSit = f.lane <= -1.5 ? Math.min(0, f.dados) : f.dados;
+    const situation = (f.lane < 0 ? 2 : 1.5) * f.lane * s.weights.lane + dadosSit * s.weights.dados + f.comp * s.weights.comp + f.adc * s.weights.adc + 0.5 * f.blind * s.weights.blind;
     return { name, sup: k, score, f, why, games: p.g, status, situation };
   }).sort((a, b) => Number(a.status !== "ok") - Number(b.status !== "ok") || b.score - a.score);
 
@@ -261,12 +279,16 @@ export function decide(d: Draft, s: Settings, flags: Flags, stats: Stats, myRole
   const warned = enemies.filter((n) => s.mainWarn.includes(n) && !s.mainAvoid.includes(n));
   if (warned.length) { main.situation! -= 1.2 * warned.length; main.why.push([-1.2 * warned.length, `alerta pra ${main.name}: ${warned.join(", ")}`]); }
   if (blocked.length) main.why.push([-5, `${blocked.join(", ")}: você não joga ${main.name} contra`]);
-  const kept = !blocked.length && main.situation! >= -s.mainTolerance;
+  const isBlind = !E.sup;
+  if (s.mainNoBlind && isBlind) main.why.push([-5, `não dá pra blindar ${main.name}: espere o sup inimigo aparecer`]);
+  const kept = !blocked.length && !(s.mainNoBlind && isBlind) && main.situation! >= -s.mainTolerance;
   let ordered = kept ? [main, ...results.filter((r) => r !== main)] : results;
   if (kept) main.why.push([3, results[0] === main ? `${main.name} é sua main e encaixa bem` : `jogável de ${main.name}: sua main fica`]);
   else {
     // Main fora: a primeira reserva jogável na sua ordem de preferência; se nenhuma for, a maior nota
-    const backup = s.backups.map((n) => results.find((r) => r.name === n && r.status === "ok")).find((r) => r && r.situation! >= -s.mainTolerance);
+    // em blind, a reserva também precisa aguentar o risco inteiro de counter, não só metade
+    const fits = (r: Result) => r.situation! + (isBlind ? 0.5 * r.f.blind * s.weights.blind : 0) >= -s.mainTolerance;
+    const backup = s.backups.map((n) => results.find((r) => r.name === n && r.status === "ok")).find((r) => r && fits(r));
     if (backup) { ordered = [backup, ...results.filter((r) => r !== backup)]; backup.why.push([2.5, `${backup.name} é sua próxima opção e é jogável aqui`]); }
     const worst = main.why.filter((w) => w[0] < 0).sort((a, b) => a[0] - b[0]).slice(0, 2).map((w) => w[1]).join("; ");
     ordered[0].why.push([2, `${main.name} evitada: ${worst || "draft ruim pra ela"}`]);
