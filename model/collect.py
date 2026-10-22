@@ -101,7 +101,20 @@ def compact(m: dict) -> dict | None:
         pos = p.get("teamPosition") or ""
         if not pos:
             return None
-        teams[p["teamId"]].append({"r": pos, "c": p["championName"], "p": p["puuid"]})
+        perks = p.get("perks", {})
+        styles = perks.get("styles", [])
+        teams[p["teamId"]].append({
+            "r": pos, "c": p["championName"], "p": p["puuid"],
+            # itens finais, feitiços e runas: base das builds, runas e situacionais
+            "it": [p.get(f"item{i}", 0) for i in range(7)],
+            "sp": [p.get("summoner1Id", 0), p.get("summoner2Id", 0)],
+            "ru": {
+                "p": styles[0]["style"] if styles else 0,
+                "s": styles[1]["style"] if len(styles) > 1 else 0,
+                "k": [sel["perk"] for st in styles for sel in st.get("selections", [])],
+                "f": [perks.get("statPerks", {}).get(x, 0) for x in ("offense", "flex", "defense")],
+            },
+        })
         win[p["teamId"]] = bool(p.get("win"))
     if len(teams[100]) != 5 or len(teams[200]) != 5:
         return None

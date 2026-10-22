@@ -31,7 +31,9 @@ def main(n=6000, mult=1.0):
                 sup = mains.get(sup_player) or R.choice(SUP)
                 picks = [R.choice(TOP), R.choice(JG), R.choice(MID), R.choice(ADC), sup]
                 pp = [f"p{R.randint(60, 399)}" for _ in range(4)] + [sup_player]
-                teams.append({"picks": [{"r": r, "c": api(c), "p": p} for r, c, p in zip(["TOP", "JUNGLE", "MIDDLE", "BOTTOM", "UTILITY"], picks, pp)]})
+                teams.append({"picks": [{"r": r, "c": api(c), "p": p, "it": [R.choice([3157, 3089, 3135, 3165, 3116, 3020, 3158, 3870, 3504, 6616, 3107, 3065]) for _ in range(6)] + [3340],
+                                     "sp": [4, R.choice([14, 7, 12])], "ru": {"p": 8200, "s": R.choice([8300, 8400]), "k": [8214, 8226, 8210, 8237, 8345, 8347], "f": [5008, 5008, 5001]}}
+                                    for r, c, p in zip(["TOP", "JUNGLE", "MIDDLE", "BOTTOM", "UTILITY"], picks, pp)]})
             z = 0.0
             for me, op in ((0, 1), (1, 0)):
                 s = teams[me]["picks"][4]["c"]

@@ -83,7 +83,13 @@ export async function readChampSelect(cat: Catalog): Promise<LiveState> {
 }
 
 // ---------- histórico pessoal ----------
-interface HistGame { gameId: number; gameCreation: number; queueId: number; participants?: { championId: number; stats?: { win?: boolean }; timeline?: { lane?: string; role?: string } }[] }
+interface HistGame {
+  gameId: number; gameCreation: number; queueId: number;
+  participants?: { championId: number; spell1Id?: number; spell2Id?: number; stats?: { win?: boolean } & Record<string, unknown>; timeline?: { lane?: string; role?: string } }[];
+}
+// Item de sup (linha do World Atlas) e Smite: dizem a rota com certeza, melhor que a lane do cliente
+const SUP_ITEMS = new Set([3865, 3866, 3867, 3869, 3870, 3871, 3876, 3877]);
+const SMITE = 11;
 const RANKED = new Set([420, 440]); // solo/duo e flex
 
 function roleOf(lane?: string, role?: string, champ?: string): Role | null {
@@ -120,7 +126,13 @@ export async function readHistory(cat: Catalog): Promise<{ account: Account; gam
       if (!p || !RANKED.has(g.queueId)) continue;
       const champ = cat.byKey.get(p.championId)?.name;
       if (!champ) continue;
-      games.push({ id: g.gameId, t: g.gameCreation, champ, role: roleOf(p.timeline?.lane, p.timeline?.role, champ), win: !!p.stats?.win });
+      const items = [0, 1, 2, 3, 4, 5, 6].map((i) => Number(p.stats?.[`item${i}`] ?? 0));
+      const supItem = items.some((i) => SUP_ITEMS.has(i)), anyItem = items.some((i) => i > 0);
+      let role: Role | null = supItem ? "sup" : p.spell1Id === SMITE || p.spell2Id === SMITE ? "jg" : roleOf(p.timeline?.lane, p.timeline?.role, champ);
+      // o cliente disse "sup" mas não tinha item de sup: era o carry do bot (ou o mid, se a lane for mid)
+      if (role === "sup" && !supItem && anyItem) role = (p.timeline?.lane ?? "").toUpperCase().startsWith("MID") ? "mid" : "adc";
+      // o cliente disse outra rota mas tinha item de sup: era sup (ex.: sup que rodou pro mid)
+      games.push({ id: g.gameId, t: g.gameCreation, champ, role, win: !!p.stats?.win });
     }
     if (list.length < 90) break;
   }

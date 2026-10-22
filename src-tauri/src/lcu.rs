@@ -126,3 +126,44 @@ pub async fn match_history(beg: u32, end: u32) -> Result<Option<serde_json::Valu
 pub async fn gameflow_phase() -> Result<Option<String>, String> {
     Ok(get("/lol-gameflow/v1/gameflow-phase").await?.and_then(|r| r.ok()).and_then(|v| v.as_str().map(String::from)))
 }
+
+/// Requisição com método e corpo (usada pra criar a página de runas).
+async fn send(method: reqwest::Method, path: &str, body: Option<serde_json::Value>) -> Result<Option<serde_json::Value>, String> {
+    let Some(c) = creds_from_process().or_else(creds_from_lockfile) else {
+        return Err("Cliente do LoL fechado".into());
+    };
+    let client = reqwest::Client::builder()
+        .danger_accept_invalid_certs(true)
+        .timeout(std::time::Duration::from_secs(8))
+        .build()
+        .map_err(|e| e.to_string())?;
+    let auth = STANDARD.encode(format!("riot:{}", c.password));
+    let mut req = client.request(method, format!("https://127.0.0.1:{}{}", c.port, path)).header("Authorization", format!("Basic {auth}"));
+    if let Some(b) = body {
+        req = req.json(&b);
+    }
+    let res = req.send().await.map_err(|e| e.to_string())?;
+    let status = res.status();
+    let text = res.text().await.unwrap_or_default();
+    if !status.is_success() {
+        return Err(format!("{}: {}", status.as_u16(), text));
+    }
+    Ok(serde_json::from_str(&text).ok())
+}
+
+/// Troca a página de runas atual pela recomendada (substitui a página atual se ela for editável).
+#[tauri::command]
+pub async fn set_rune_page(name: String, primary: i64, sub: i64, perks: Vec<i64>) -> Result<(), String> {
+    if let Some(cur) = get("/lol-perks/v1/currentpage").await?.and_then(|r| r.ok()) {
+        if cur.get("isDeletable").and_then(|v| v.as_bool()).unwrap_or(false) {
+            if let Some(id) = cur.get("id").and_then(|v| v.as_i64()) {
+                let _ = send(reqwest::Method::DELETE, &format!("/lol-perks/v1/pages/{id}"), None).await;
+            }
+        }
+    }
+    let body = serde_json::json!({
+        "name": name, "primaryStyleId": primary, "subStyleId": sub,
+        "selectedPerkIds": perks, "current": true
+    });
+    send(reqwest::Method::POST, "/lol-perks/v1/pages", Some(body)).await.map(|_| ())
+}

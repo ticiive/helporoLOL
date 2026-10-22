@@ -44,9 +44,11 @@ export function saveGames(acc: string, g: Game[]) { try { localStorage.setItem(k
 
 /** Junta jogos novos aos já guardados, sem repetir. Retorna quantos entraram. */
 export function mergeGames(old: Game[], fresh: Game[]): [Game[], number] {
-  const ids = new Set(old.map((g) => g.id));
-  const add = fresh.filter((g) => !ids.has(g.id));
-  return [[...old, ...add].sort((a, b) => b.t - a.t), add.length];
+  // a leitura nova vence: assim jogos antigos com rota errada são corrigidos
+  const byId = new Map(old.map((g) => [g.id, g]));
+  let added = 0;
+  fresh.forEach((g) => { if (!byId.has(g.id)) added++; byId.set(g.id, g); });
+  return [[...byId.values()].sort((a, b) => b.t - a.t), added];
 }
 
 export function buildStats(games: Game[], useSeed: boolean): Stats {

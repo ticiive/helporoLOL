@@ -9,6 +9,9 @@ import { inTauri, readChampSelect, readHistory, type Account, type LiveState } f
 import { invoke } from "@tauri-apps/api/core";
 import { confidence, loadModel, predict, type TrainedModel } from "./engine/model";
 import { checkUpdate, installUpdate, type Pending } from "./lib/updater";
+import { loadBuilds, loadCounters, loadNames, loadSynergies, type Builds, type Names } from "./lib/builds";
+import { BuildPanel } from "./components/BuildPanel";
+import { specialPicks, type Counters } from "./engine/engine";
 import { buildStats, loadGames, mergeGames, overall, saveGames, type Game } from "./lib/stats";
 
 const RN: Record<Role, string> = { top: "Top", jg: "Jungle", mid: "Mid", adc: "ADC", sup: "Sup" };
@@ -44,11 +47,21 @@ export default function App() {
   const [sync, setSync] = useState<{ at: number; added: number } | null>(null);
 
   useEffect(() => { loadCatalog().then(setCat).catch(() => setCatErr(true)); }, []);
+  useEffect(() => { loadNames(cat.version).then((n) => n && setNames(n)); }, [cat.version]);
   const [timerUrl, setTimerUrl] = useState("");
   // modelo treinado: baixa ao abrir e de hora em hora (o treino roda uma vez por dia)
   const [trained, setTrained] = useState<TrainedModel | null>(() => { try { return JSON.parse(localStorage.getItem("helporo.model") || "null"); } catch { return null; } });
   useEffect(() => {
     const get = () => loadModel().then((m) => { if (m) { setTrained(m); try { localStorage.setItem("helporo.model", JSON.stringify(m)); } catch { /* cheio */ } } });
+    get(); const id = setInterval(get, 60 * 60 * 1000); return () => clearInterval(id);
+  }, []);
+  // runas, builds e counters (dados Mestre+ da branch data) e nomes do Data Dragon
+  const [builds, setBuilds] = useState<Builds | null>(null);
+  const [counters, setCounters] = useState<Counters | null>(null);
+  const [synergies, setSynergies] = useState<Counters | null>(null);
+  const [names, setNames] = useState<Names | null>(null);
+  useEffect(() => {
+    const get = () => { loadBuilds().then(setBuilds); loadCounters().then(setCounters); loadSynergies().then(setSynergies); };
     get(); const id = setInterval(get, 60 * 60 * 1000); return () => clearInterval(id);
   }, []);
   // atualização do app
@@ -108,12 +121,14 @@ export default function App() {
   const info = useMemo(() => (n: string) => cat.byName.get(norm(n)) ?? null, [cat]);
   const conf = trained ? confidence(trained) : 0;
   const modelZ = useMemo(() => (trained && conf > 0 ? predict(trained, draftForMe) : null), [trained, conf, draftForMe]);
-  const decision = useMemo(() => decide(draftForMe, settings, flags, stats, myRole, info, modelZ, conf), [draftForMe, settings, flags, stats, myRole, info, modelZ, conf]);
+  const decision = useMemo(() => decide(draftForMe, settings, flags, stats, myRole, info, modelZ, conf, counters, synergies), [draftForMe, settings, flags, stats, myRole, info, modelZ, conf, counters, synergies]);
   const results = decision.results;
   const risk = blindRisk(draftForMe, myRole);
   const allies = ROLES.filter((r) => r !== myRole).map((r) => draftForMe.ally[r]).filter(Boolean) as string[];
   const enemies = ROLES.map((r) => draft.enemy[r]).filter(Boolean) as string[];
   const top = results[0]?.status === "ok" ? results[0] : null;
+  // opções sinalizadas: um counter do oponente direto e uma sinergia com o parceiro, sempre
+  const special = specialPicks(results, draftForMe, myRole, stats, flags, info, counters, synergies);
   const rolePool = candidates(myRole, settings, stats).filter((n) => settings.pool[myRole].includes(n) || (stats[n]?.byRole[myRole]?.w ?? 0) + (stats[n]?.byRole[myRole]?.l ?? 0) > 0);
 
   const setSlot = (side: "ally" | "enemy", r: Role, v: string | null) => setDraft((d) => ({ ...d, [side]: { ...d[side], [r]: v } }));
@@ -190,6 +205,23 @@ export default function App() {
             <span className="pill">Risco de counter {Math.round(risk * 100)}%</span>
           </div>
           <ResultPanel results={results} risk={risk} enemySup={myRole === "sup" ? draft.enemy.sup : null} settings={settings} cat={cat} onLane={setLane} />
+          <div className="specials">
+            {([["counter", special.counter, special.opp ? `vs ${special.opp}` : "aparece quando o oponente da sua rota for revelado"],
+               ["synergy", special.synergy, special.partner ? `com ${special.partner}` : "aparece quando o seu parceiro pickar"]] as const).map(([k, sp, ctx]) => (
+              <div key={k} className={`special ${k}`}>
+                <div className="lbl">{k === "counter" ? "Opção counter" : "Opção sinergia"} <span className="note">{ctx}</span></div>
+                {sp ? (
+                  <div className="alt">
+                    <Icon cat={cat} champ={cat.byName.get(norm(sp.name)) ?? null} size={30} />
+                    <b>{sp.name}<small> {sp.tag}</small></b>
+                    <span />
+                    <span className="sc">{sp.wr.toFixed(1)}% · {sp.n}j</span>
+                  </div>
+                ) : <p className="note">{(k === "counter" ? special.opp : special.partner) ? "Sem dados suficientes ainda pra essa dupla." : ""}</p>}
+              </div>
+            ))}
+          </div>
+          {top && <BuildPanel champ={top.name} role={myRole} build={builds?.[myRole]?.[top.name]} names={names} enemies={ROLES.map((r) => draft.enemy[r]).filter(Boolean) as string[]} flags={(n) => flags(n)} />}
         </div>
 
         <div className="team enemy">

@@ -9,11 +9,11 @@ export type Team = Record<Role, string | null>;
 export interface Draft { ally: Team; enemy: Team; bans: string[] }
 
 export const FACTORS = [
-  ["lane", "Lane"], ["dados", "Dados"], ["comp", "Comp"], ["adc", "Seu ADC"], ["meta", "Meta"], ["voce", "Você"], ["blind", "Blind"], ["modelo", "Modelo"],
+  ["lane", "Lane"], ["dados", "Dados"], ["comp", "Comp"], ["adc", "Seu ADC"], ["meta", "Meta"], ["voce", "Você"], ["blind", "Blind"], ["modelo", "Modelo"], ["counter", "Counter"], ["sinergia", "Sinergia"],
 ] as const;
 export type Factor = (typeof FACTORS)[number][0];
 export type Weights = Record<Factor, number>;
-export const DEFAULT_WEIGHTS: Weights = { lane: 1, dados: 1, comp: 1, adc: 1, meta: 0.6, voce: 1, blind: 1, modelo: 1 };
+export const DEFAULT_WEIGHTS: Weights = { lane: 1, dados: 1, comp: 1, adc: 1, meta: 0.6, voce: 1, blind: 1, modelo: 1, counter: 1, sinergia: 1 };
 
 export interface Settings {
   weights: Weights;
@@ -155,13 +155,23 @@ export function roleGames(stats: Stats, role: Role) {
 
 /** Candidatos: seu pool manual + seus campeões na rota; numa rota com poucos jogos seus, entram também os campeões comuns da rota. */
 export function candidates(role: Role, s: Settings, stats: Stats): string[] {
-  const fromStats = Object.entries(stats).filter(([, c]) => { const r = c.byRole[role]; return r && r.w + r.l >= (role === "sup" ? 5 : 1); }).map(([n]) => n);
+  // O histórico do cliente às vezes marca a rota errado (sup que roda pro mid vira "mid").
+  // Campeão fora da lista normal da rota só entra se você jogou ele ali de verdade:
+  // 4+ jogos e pelo menos 4% dos seus jogos com ele naquela rota.
+  const fromStats = Object.entries(stats).filter(([n, c]) => {
+    const r = c.byRole[role];
+    if (!r) return false;
+    const g = r.w + r.l, total = c.w + c.l;
+    if (role === "sup") return g >= 5;
+    if (ROLE_LIST[role].has(n)) return g >= 1;
+    return g >= 4 && g / Math.max(total, 1) >= 0.04;
+  }).map(([n]) => n);
   const explore = roleGames(stats, role) < 40 ? [...ROLE_LIST[role]] : [];
   return [...new Set([...s.pool[role], ...fromStats, ...explore])];
 }
 
 /** O quanto um campeão se parece com os que você joga (características, tags oficiais e alcance). */
-function similarity(name: string, flags: Flags, info: Info, stats: Stats) {
+export function similarity(name: string, flags: Flags, info: Info, stats: Stats) {
   const tok = (n: string) => { const i = info(n); return new Set([...flags(n).replace(/[GSH]/g, ""), ...(i?.tags ?? []), i ? (i.ranged ? "rng" : "mel") : ""].filter(Boolean)); };
   const a = tok(name);
   const sims = Object.entries(stats).filter(([n, c]) => n !== name && c.w + c.l >= 3).map(([n, c]) => {
@@ -174,7 +184,12 @@ function similarity(name: string, flags: Flags, info: Info, stats: Stats) {
 }
 
 /** model: logit centrado de cada sup vindo do modelo treinado; conf: 0..1, quanto confiar nele */
-export function decide(d: Draft, s: Settings, flags: Flags, stats: Stats, myRole: Role, info: Info = () => null, model: Record<string, number> | null = null, conf = 0): Decision {
+/** Winrate de cada campeão contra o oponente da rota, dos dados Mestre+: counters[rota][inimigo] = [[campeão, wr, jogos]] */
+export type Counters = Record<string, Record<string, [string, number, number][]>>;
+/** Parceiro de sinergia de cada rota: sup<->adc, mid/top -> jungle, jungle -> mid */
+export const PARTNER: Record<Role, Role> = { sup: "adc", adc: "sup", mid: "jg", top: "jg", jg: "mid" };
+
+export function decide(d: Draft, s: Settings, flags: Flags, stats: Stats, myRole: Role, info: Info = () => null, model: Record<string, number> | null = null, conf = 0, counters: Counters | null = null, synergies: Counters | null = null): Decision {
   const { ally: A, enemy: E } = d;
   const hf = (n: string | null, c: string) => !!n && flags(n).includes(c);
   const taken = new Set([...ROLES.map((r) => A[r]), ...ROLES.map((r) => E[r])].filter(Boolean) as string[]);
@@ -201,7 +216,7 @@ export function decide(d: Draft, s: Settings, flags: Flags, stats: Stats, myRole
   const results = cands.map((name): Result => {
     const k = isSup ? SUP_BY_NAME[name] ?? null : null;
     const fl = flags(name);
-    const f: Record<Factor, number> = { lane: 0, dados: 0, comp: 0, adc: 0, meta: 0, voce: 0, blind: 0, modelo: 0 };
+    const f: Record<Factor, number> = { lane: 0, dados: 0, comp: 0, adc: 0, meta: 0, voce: 0, blind: 0, modelo: 0, counter: 0, sinergia: 0 };
     const why: [number, string][] = [];
     const add = (fac: Factor, v: number, txt: string, min = 0.5) => { f[fac] += v; if (Math.abs(v) >= min) why.push([v, txt]); };
 
@@ -270,6 +285,23 @@ export function decide(d: Draft, s: Settings, flags: Flags, stats: Stats, myRole
       const v = model[name] * 4 * conf;
       add("modelo", v, `modelo (Mestre+): ${v > 0 ? "+" : ""}${(model[name] * 25).toFixed(1)} pts de winrate`, 0.4);
     }
+    // counter do oponente direto (fora do sup, que já tem a tabela de lane e os matchups)
+    const opp = myRole === "sup" ? null : E[myRole];
+    const row = opp && counters ? counters[myRole]?.[opp]?.find((x) => x[0] === name) : undefined;
+    if (row) {
+      const [, cwr, n] = row;
+      const v = ((cwr - 50) * n) / (n + 100) * 0.35;
+      add("counter", v, `${cwr >= 53 ? "strong counter: " : ""}${cwr.toFixed(1)}% vs ${opp} (${n} jogos Mestre+)`, 0.4);
+    }
+    // sinergia com o parceiro (dados Mestre+); no sup, os 6 com tabela do op.gg já usam o fator "Seu ADC"
+    const partner = A[PARTNER[myRole]];
+    const coveredByAdc = isSup && !!k && !!partner && !!SYN_ADC[k][partner];
+    const srow = partner && synergies && !coveredByAdc ? synergies[myRole]?.[partner]?.find((x) => x[0] === name) : undefined;
+    if (srow) {
+      const [, swr, n] = srow;
+      const v = ((swr - 50) * n) / (n + 100) * 0.35;
+      add("sinergia", v, `sinergia com ${partner}: ${swr.toFixed(1)}% juntos (${n} jogos Mestre+)`, 0.4);
+    }
     const score = (Object.keys(f) as Factor[]).reduce((a, x) => a + f[x] * (s.weights[x] ?? 1), 0);
     const status = d.bans.includes(name) ? "banned" : taken.has(name) ? "picked" : "ok";
     // winrate de jogo bom não salva uma lane que você sabe que é ruim
@@ -300,4 +332,49 @@ export function decide(d: Draft, s: Settings, flags: Flags, stats: Stats, myRole
     ordered[0].why.push([2, `${main.name} evitada: ${worst || "draft ruim pra ela"}`]);
   }
   return { results: ordered, main: { name: main.name, situation: main.situation!, kept } };
+}
+
+
+// ---------- opções sinalizadas: sempre um counter e uma sinergia ----------
+export interface Special { name: string; wr: number; n: number; tag: string; inPool: boolean }
+
+/**
+ * Escolhe uma opção "strong counter" do oponente direto e uma de "sinergia" com o parceiro.
+ * Prefere campeão do seu pool (e diz se é main seu); se nenhum serve, mostra o melhor de fora.
+ */
+export function specialPicks(results: Result[], d: Draft, myRole: Role, stats: Stats, flags: Flags, info: Info,
+  counters: Counters | null, synergies: Counters | null): { counter: Special | null; synergy: Special | null; opp: string | null; partner: string | null } {
+  const taken = new Set([...ROLES.map((r) => d.ally[r]), ...ROLES.map((r) => d.enemy[r]), ...d.bans].filter(Boolean) as string[]);
+  const pool = new Set(results.filter((r) => r.status === "ok").map((r) => r.name));
+  const roleGames = (n: string) => { const c = stats[n]?.byRole[myRole]; return c ? c.w + c.l : 0; };
+  const tagFor = (n: string, kind: string) => {
+    const g = roleGames(n);
+    if (g >= 20) return `${kind} · main seu (${g} jogos)`;
+    if (pool.has(n)) return `${kind} · no seu pool`;
+    const sm = similarity(n, flags, info, stats);
+    return `${kind} · fora do seu pool${sm.like && sm.sim >= 0.45 ? `, parecido com ${sm.like}` : ""}`;
+  };
+  const pick = (rows: [string, number, number][] | undefined, kind: string, min = 52): Special | null => {
+    const ok = (rows ?? []).filter(([n, w, g]) => w >= min && g >= 25 && !taken.has(n));
+    const best = ok.find(([n]) => pool.has(n)) ?? ok[0];
+    return best ? { name: best[0], wr: best[1], n: best[2], tag: tagFor(best[0], kind), inPool: pool.has(best[0]) } : null;
+  };
+  const opp = d.enemy[myRole], partner = d.ally[PARTNER[myRole]];
+  let counter = opp ? pick(counters?.[myRole]?.[opp], "strong counter") : null;
+  let synergy = partner ? pick(synergies?.[myRole]?.[partner], "sinergia perfeita") : null;
+  // no sup, enquanto não há dados Mestre+ da dupla, usa as tabelas do op.gg/Lolalytics dos seus sups
+  if (myRole === "sup") {
+    if (!counter && opp) {
+      const rows = SUP_KEYS.map((k) => [SUPS[k], MU[k][opp]?.wr ?? 0, MU[k][opp]?.n ?? 0] as [string, number, number]).sort((a, b) => b[1] - a[1]);
+      counter = pick(rows, "strong counter", 52.5);
+    }
+    if (!synergy && partner) {
+      // dupla acima da média do próprio sup (+1 ponto), mostrando o winrate real
+      const rows = SUP_KEYS.filter((k) => SYN_ADC[k][partner] && SYN_ADC[k][partner].wr - META[k].wr >= 1)
+        .sort((a, b) => (SYN_ADC[b][partner].wr - META[b].wr) - (SYN_ADC[a][partner].wr - META[a].wr))
+        .map((k) => [SUPS[k], SYN_ADC[k][partner].wr, SYN_ADC[k][partner].n] as [string, number, number]);
+      synergy = pick(rows, "sinergia perfeita", 0);
+    }
+  }
+  return { counter, synergy, opp, partner };
 }

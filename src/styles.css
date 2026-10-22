@@ -134,3 +134,27 @@ h1 span { color: var(--gold); }
 .banner code { color: var(--fg); background: var(--panel2); padding: 1px 6px; border-radius: 4px; }
 .banner.ok { border-color: var(--good); display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .banner.ok b { color: var(--good); }
+
+.counters { display: flex; flex-direction: column; gap: 5px; }
+.build { display: flex; flex-direction: column; gap: 8px; border-top: 1px solid var(--line); padding-top: 12px; }
+.bhead { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.runes { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.runes img { width: 30px; height: 30px; border-radius: 50%; background: var(--panel2); }
+.runes img.key { width: 40px; height: 40px; }
+.runes .sep { width: 1px; height: 26px; background: var(--line); margin: 0 4px; }
+.brow { display: flex; gap: 8px; flex-wrap: wrap; }
+.bitem { display: flex; align-items: center; gap: 6px; background: var(--panel2); border-radius: 6px; padding: 3px 8px 3px 3px; font-size: 12.5px; }
+.bitem img { width: 28px; height: 28px; border-radius: 4px; }
+.bitem .ph { width: 28px; height: 28px; border-radius: 4px; background: var(--line); }
+.situ { display: flex; flex-direction: column; gap: 6px; }
+.situ > div { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+details summary { cursor: pointer; }
+
+.specials { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+@media (max-width: 1000px) { .specials { grid-template-columns: 1fr; } }
+.special { border: 1px solid var(--line); border-radius: 8px; padding: 8px; display: flex; flex-direction: column; gap: 6px; }
+.special.counter { border-color: var(--bad); }
+.special.synergy { border-color: var(--good); }
+.special .lbl .note { text-transform: none; letter-spacing: 0; font-family: var(--body); margin-left: 4px; }
+.special .alt { grid-template-columns: 30px minmax(0, 1fr) auto auto; }
+.special .alt b small { display: block; }

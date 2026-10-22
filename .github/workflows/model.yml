@@ -48,6 +48,10 @@ jobs:
         working-directory: model
         run: python train.py
 
+      - name: Runas, builds e counters
+        working-directory: model
+        run: python builds.py
+
       - name: Salva dados e modelo na branch data
         if: always()
         run: |
