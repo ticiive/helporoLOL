@@ -22,7 +22,7 @@ Lane e Dados são separados de propósito: Soraka tem 52% de winrate de jogo con
 
 Com o helporoLOL aberto no PC, abra no Mac ou no celular (mesma rede Wi-Fi) o endereço que aparece no topo do app, tipo `http://192.168.0.10:7777`. Na primeira vez o Windows pergunta se libera o acesso na rede: aceite em **redes privadas**.
 
-A página mostra os inimigos da partida com três quadrados: ult e os dois feitiços. Os campeões e feitiços vêm da API local da partida, mas os timers são manuais: você toca quando vê o feitiço sendo usado. Tempos base, sem runa nem item. Pra testar fora de partida: `http://IP:7777/?demo`.
+A página mostra os inimigos da partida com três quadrados: ult e os dois feitiços. Os campeões, os feitiços e o tempo de partida vêm da API local da partida; os timers são manuais: você toca quando vê o feitiço sendo usado, e embaixo aparece o horário da partida em que ele volta, pra mandar no chat. Feitiços com tempo base; ult com o nível atual e uma aceleração média estimada pelo tempo de jogo (sem ler item nem runa). Pra testar fora de partida: `http://IP:7777/?demo`.
 
 ## Estrutura
 

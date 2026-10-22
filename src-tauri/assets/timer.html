@@ -23,6 +23,9 @@ h1 { font-family:var(--display); font-size:20px; margin:0; letter-spacing:.04em;
 .sq .cd { position:absolute; inset:0; display:none; place-items:center; background:rgba(40,46,54,.82); font-family:var(--display); font-weight:700; font-size:clamp(18px,6vw,26px); font-variant-numeric:tabular-nums; }
 .sq.run .cd { display:grid; }
 .sq.ready { box-shadow:0 0 0 2px var(--good); }
+.sq .back { position:absolute; left:0; right:0; bottom:0; display:none; padding:2px 0; text-align:center; font-size:11.5px; font-weight:500; background:rgba(0,0,0,.55); }
+.sq.run .back { display:block; } .sq.run .lab { display:none; }
+.clock { font-family:var(--display); font-weight:700; font-variant-numeric:tabular-nums; color:var(--gold); }
 .sq.locked { opacity:.35; cursor:default; }
 .sq:focus-visible { outline:2px solid var(--gold); outline-offset:2px; }
 .empty { color:var(--muted); font-size:14px; background:var(--panel); border:1px dashed var(--line); border-radius:8px; padding:18px; text-align:center; line-height:1.5; }
@@ -32,14 +35,17 @@ h1 { font-family:var(--display); font-size:20px; margin:0; letter-spacing:.04em;
 </head>
 <body>
 <div class="wrap">
-  <header><h1>helporo<span>LOL</span> timer</h1><span class="st" id="st">conectando…</span></header>
+  <header><h1>helporo<span>LOL</span> timer</h1><span class="st"><span class="clock" id="clock"></span> <span id="st">conectando…</span></span></header>
   <div id="list"><div class="empty">Procurando a partida…</div></div>
-  <p class="note">Toque quando VIR o feitiço ou o ult sendo usado. Toque de novo pra cancelar. Tempos base, sem runa ou item. O ult usa o nível atual do campeão.</p>
+  <p class="note">Toque quando VIR o feitiço ou o ult sendo usado. Toque de novo pra cancelar. Embaixo do quadrado aparece o horário da partida em que volta, pra mandar no chat. Feitiços: tempo base. Ult: tempo do nível atual com uma estimativa média de aceleração de habilidade pelo tempo de jogo (sem ler item nem runa), por isso o ~.</p>
 </div>
 <script>
 const CDN = "https://ddragon.leagueoflegends.com";
 const $ = (id) => document.getElementById(id);
 let V = "", CHAMPS = {}, SPELLS = {}, ULT = {}, enemies = [], timers = {};
+let clockBase = null; // { game: segundos de partida, at: Date.now() da leitura }
+const gameNow = () => (clockBase ? clockBase.game + (Date.now() - clockBase.at) / 1000 : null);
+const fmt = (t) => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, "0")}`;
 const demo = new URLSearchParams(location.search).has("demo");
 
 async function boot() {
@@ -65,7 +71,7 @@ async function ultCd(id) {
 
 async function poll() {
   let data;
-  if (demo) data = { inGame: true, me: "eu#br1", players: [
+  if (demo) data = { inGame: true, me: "eu#br1", gameTime: (clockBase ? gameNow() : 14 * 60 + 5), players: [
     { riotId: "eu#br1", team: "ORDER", champ: "game_character_displayname_Soraka", level: 9, spell1: "x_SummonerSpell_SummonerFlash_DisplayName", spell2: "x_SummonerSpell_SummonerDot_DisplayName" },
     { riotId: "a", team: "CHAOS", champ: "game_character_displayname_Garen", level: 11, spell1: "x_SummonerSpell_SummonerFlash_DisplayName", spell2: "x_SummonerSpell_SummonerTeleport_DisplayName" },
     { riotId: "b", team: "CHAOS", champ: "game_character_displayname_LeeSin", level: 10, spell1: "x_SummonerSpell_SummonerSmite_DisplayName", spell2: "x_SummonerSpell_SummonerFlash_DisplayName" },
@@ -75,7 +81,8 @@ async function poll() {
   else { try { data = await (await fetch("/players", { cache: "no-store" })).json(); } catch { data = null; } }
 
   if (!data) { $("st").textContent = "helporoLOL fechado no PC"; return render([]); }
-  if (!data.inGame) { $("st").textContent = "esperando partida"; return render([]); }
+  if (!data.inGame) { $("st").textContent = "esperando partida"; clockBase = null; return render([]); }
+  if (typeof data.gameTime === "number") clockBase = { game: data.gameTime, at: Date.now() };
   const me = data.players.find((p) => (p.riotId || "").toLowerCase() === (data.me || "").toLowerCase());
   const mine = me ? me.team : "ORDER";
   const list = data.players.filter((p) => p.team !== mine);
@@ -94,7 +101,7 @@ function render(list) {
     }
     $("list").innerHTML = list.map((p, i) => {
       const id = champId(p.champ), name = CHAMPS[id]?.name ?? id;
-      const sq = (slot, img, label) => `<div class="sq" role="button" tabindex="0" id="sq-${i}-${slot}" data-i="${i}" data-slot="${slot}" style="${img ? `background-image:url(${img})` : ""}"><span class="lab">${label}</span><span class="cd"></span></div>`;
+      const sq = (slot, img, label) => `<div class="sq" role="button" tabindex="0" id="sq-${i}-${slot}" data-i="${i}" data-slot="${slot}" style="${img ? `background-image:url(${img})` : ""}"><span class="lab">${label}</span><span class="cd"></span><span class="back"></span></div>`;
       const spell = (raw) => { const s = SPELLS[spellId(raw)]; return [s && V ? `${CDN}/cdn/${V}/img/spell/${s.image.full}` : "", s?.name ?? spellId(raw).replace("Summoner", "")]; };
       const [i1, n1] = spell(p.spell1), [i2, n2] = spell(p.spell2);
       const ultImg = V && CHAMPS[id] ? `${CDN}/cdn/${V}/img/champion/${CHAMPS[id].image.full}` : "";
@@ -104,13 +111,15 @@ function render(list) {
     document.querySelectorAll(".sq").forEach((el) => { el.onclick = () => tap(el); el.onkeydown = (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); tap(el); } }; });
   }
   // nível define o rank do ult; antes do 6 o quadrado fica travado
-  enemies.forEach((p, i) => { const el = $(`sq-${i}-r`); if (!el) return; const rank = rankOf(p.level); el.classList.toggle("locked", rank < 0); el.querySelector(".lab").textContent = rank < 0 ? "R (nv 6)" : `R ${p.ult ? p.ult[rank] + "s" : ""}`; });
+  enemies.forEach((p, i) => { const el = $(`sq-${i}-r`); if (!el) return; const rank = rankOf(p.level); el.classList.toggle("locked", rank < 0); el.querySelector(".lab").textContent = rank < 0 ? "R (nv 6)" : `R ~${p.ult ? Math.round(p.ult[rank] * 100 / (100 + avgHaste())) + "s" : ""}`; });
 }
+/** Aceleração de habilidade média por tempo de jogo (itens comuns), sem ler o que o inimigo tem: 0 até 5 min, sobe ~1,5 por minuto, teto 40. */
+const avgHaste = () => { const t = gameNow(); return t == null ? 0 : Math.max(0, Math.min(40, (t / 60 - 5) * 1.5)); };
 const rankOf = (lvl) => (lvl >= 16 ? 2 : lvl >= 11 ? 1 : lvl >= 6 ? 0 : -1);
 
 function duration(i, slot) {
   const p = enemies[i];
-  if (slot === "r") { const r = rankOf(p.level); return r < 0 ? 0 : (p.ult?.[r] ?? 100); }
+  if (slot === "r") { const r = rankOf(p.level); return r < 0 ? 0 : Math.round((p.ult?.[r] ?? 100) * 100 / (100 + avgHaste())); }
   const s = SPELLS[spellId(slot === "s1" ? p.spell1 : p.spell2)];
   return s ? s.cooldown[0] : 300;
 }
@@ -120,11 +129,17 @@ function tap(el) {
   const k = el.id;
   if (timers[k]) { delete timers[k]; el.classList.remove("run"); return; }
   const secs = duration(+el.dataset.i, el.dataset.slot);
-  if (secs) { timers[k] = Date.now() + secs * 1000; el.classList.remove("ready"); tick(); }
+  if (secs) {
+    timers[k] = Date.now() + secs * 1000;
+    const g = gameNow(), approx = el.dataset.slot === "r" && avgHaste() > 0 ? "~" : "";
+    el.querySelector(".back").textContent = g != null ? `volta ${approx}${fmt(g + secs)}` : "";
+    el.classList.remove("ready"); tick();
+  }
 }
 
 function tick() {
-  const now = Date.now();
+  const now = Date.now(), g = gameNow();
+  $("clock").textContent = g != null ? fmt(g) : "";
   for (const [k, end] of Object.entries(timers)) {
     const el = $(k); if (!el) { delete timers[k]; continue; }
     const left = Math.ceil((end - now) / 1000);

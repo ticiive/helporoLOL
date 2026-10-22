@@ -38,7 +38,9 @@ fn players() -> serde_json::Value {
             })
         })
         .collect();
-    serde_json::json!({ "inGame": true, "me": me, "players": slim })
+    // tempo de partida em segundos, pra mostrar quando cada feitiço volta
+    let game_time = live("gamestats").and_then(|g| g.get("gameTime").and_then(|t| t.as_f64()));
+    serde_json::json!({ "inGame": true, "me": me, "gameTime": game_time, "players": slim })
 }
 
 pub fn url() -> String {
