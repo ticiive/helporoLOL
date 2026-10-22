@@ -21,6 +21,10 @@ export interface Settings {
   pool: Record<Role, string[]>;
   /** "quero treinar": bônus mesmo com histórico ruim */
   focus: string[];
+  /** sua main: escolhida sempre que o jogo for jogável com ela */
+  main: string;
+  /** quanto o draft pode pesar contra a main antes de trocar (0 = troca fácil, 5 = só em desastre) */
+  mainTolerance: number;
   /** correções de lane: chave `${sup}|${inimigo}` */
   lane: Record<string, number>;
 }
@@ -29,7 +33,10 @@ export const DEFAULT_POOL: Record<Role, string[]> = { top: [], jg: [], mid: [], 
 export interface Result {
   name: string; sup: SupKey | null; score: number; f: Record<Factor, number>; why: [number, string][];
   games: number; status: "ok" | "banned" | "picked";
+  /** só no resultado da main: quanto o draft pesa contra ela (lane, dados, comp, ADC, metade do blind) */
+  situation?: number;
 }
+export interface Decision { results: Result[]; main: { name: string; situation: number; kept: boolean } | null }
 
 type Flags = (name: string | null) => string;
 /** Dados extras do campeão (Data Dragon): tags oficiais, dificuldade 1-10 e se é ranged. */
@@ -156,7 +163,7 @@ function similarity(name: string, flags: Flags, info: Info, stats: Stats) {
   return { sim: sims.reduce((t, x) => t + x.j * Math.min(x.g, 30), 0) / wsum, like: sims[0].n };
 }
 
-export function decide(d: Draft, s: Settings, flags: Flags, stats: Stats, myRole: Role, info: Info = () => null): Result[] {
+export function decide(d: Draft, s: Settings, flags: Flags, stats: Stats, myRole: Role, info: Info = () => null): Decision {
   const { ally: A, enemy: E } = d;
   const hf = (n: string | null, c: string) => !!n && flags(n).includes(c);
   const taken = new Set([...ROLES.map((r) => A[r]), ...ROLES.map((r) => E[r])].filter(Boolean) as string[]);
@@ -178,7 +185,9 @@ export function decide(d: Draft, s: Settings, flags: Flags, stats: Stats, myRole
   if (pa.n >= 3 && pa.ap < 0.6) gaps.push("noap");
   if (pa.n >= 3 && pa.ad < 0.6) gaps.push("noad");
 
-  return candidates(myRole, s, stats).map((name): Result => {
+  const cands = candidates(myRole, s, stats);
+  if (s.main && myRole === "sup" && !cands.includes(s.main)) cands.push(s.main);
+  const results = cands.map((name): Result => {
     const k = isSup ? SUP_BY_NAME[name] ?? null : null;
     const fl = flags(name);
     const f: Record<Factor, number> = { lane: 0, dados: 0, comp: 0, adc: 0, meta: 0, voce: 0, blind: 0 };
@@ -235,6 +244,19 @@ export function decide(d: Draft, s: Settings, flags: Flags, stats: Stats, myRole
 
     const score = (Object.keys(f) as Factor[]).reduce((a, x) => a + f[x] * s.weights[x], 0);
     const status = d.bans.includes(name) ? "banned" : taken.has(name) ? "picked" : "ok";
-    return { name, sup: k, score, f, why, games: p.g, status };
+    const situation = 1.5 * f.lane * s.weights.lane + f.dados * s.weights.dados + f.comp * s.weights.comp + f.adc * s.weights.adc + 0.5 * f.blind * s.weights.blind;
+    return { name, sup: k, score, f, why, games: p.g, status, situation };
   }).sort((a, b) => Number(a.status !== "ok") - Number(b.status !== "ok") || b.score - a.score);
+
+  // Regra da main: ela é o pick sempre que o draft não pesar demais contra ela.
+  const main = myRole === "sup" ? results.find((r) => r.name === s.main && r.status === "ok") : undefined;
+  if (!main) return { results, main: null };
+  const kept = main.situation! >= -s.mainTolerance;
+  const ordered = kept ? [main, ...results.filter((r) => r !== main)] : results;
+  if (kept) main.why.push([3, results[0] === main ? `${main.name} é sua main e encaixa bem` : `jogável de ${main.name}: sua main fica`]);
+  else {
+    const worst = main.why.filter((w) => w[0] < 0).sort((a, b) => a[0] - b[0]).slice(0, 2).map((w) => w[1]).join("; ");
+    ordered[0].why.push([2, `${main.name} evitada: ${worst || "draft ruim pra ela"}`]);
+  }
+  return { results: ordered, main: { name: main.name, situation: main.situation!, kept } };
 }

@@ -28,7 +28,7 @@ export default function App() {
   const [cat, setCat] = useState<Catalog>(offlineCatalog);
   const [catErr, setCatErr] = useState(false);
   const [draft, setDraft] = useState<Draft>(EXAMPLE);
-  const [settings, setSettings] = useStored<Settings>("helporo.settings2", { weights: DEFAULT_WEIGHTS, pool: DEFAULT_POOL, focus: ["Nami"], lane: {} });
+  const [settings, setSettings] = useStored<Settings>("helporo.settings2", { weights: DEFAULT_WEIGHTS, pool: DEFAULT_POOL, focus: ["Nami"], lane: {}, main: "Soraka", mainTolerance: 2 });
   const [ui, setUi] = useStored("helporo.ui", { follow: true, role: "sup" as Role });
   const [live, setLive] = useState<LiveState | null>(null);
   const [banText, setBanText] = useState("");
@@ -83,7 +83,8 @@ export default function App() {
   const flags = useMemo(() => (n: string | null) => (n ? cat.byName.get(norm(n))?.flags ?? "" : ""), [cat]);
   const draftForMe = useMemo(() => ({ ...draft, ally: { ...draft.ally, [myRole]: null } }), [draft, myRole]);
   const info = useMemo(() => (n: string) => cat.byName.get(norm(n)) ?? null, [cat]);
-  const results = useMemo(() => decide(draftForMe, settings, flags, stats, myRole, info), [draftForMe, settings, flags, stats, myRole, info]);
+  const decision = useMemo(() => decide(draftForMe, settings, flags, stats, myRole, info), [draftForMe, settings, flags, stats, myRole, info]);
+  const results = decision.results;
   const risk = blindRisk(draftForMe, myRole);
   const allies = ROLES.filter((r) => r !== myRole).map((r) => draftForMe.ally[r]).filter(Boolean) as string[];
   const enemies = ROLES.map((r) => draft.enemy[r]).filter(Boolean) as string[];
@@ -205,6 +206,23 @@ export default function App() {
           </p>
           <p className="note">{sync ? `Sincronizado às ${new Date(sync.at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}${sync.added ? `, ${sync.added} partida(s) nova(s)` : ""}. ` : ""}{games.length} partidas do cliente guardadas.</p>
           {inTauri() && <button className="ghost" onClick={syncHistory}>Sincronizar agora</button>}
+          <h2 style={{ marginTop: 16 }}>Main</h2>
+          <div className="prof">
+            <div className="sl">
+              <label htmlFor="main-in">Champ</label>
+              <input id="main-in" className="banin wide" list="champ-list" defaultValue={settings.main} onBlur={(e) => { const c = cat.byName.get(norm(e.target.value)); setSettings((s) => ({ ...s, main: c ? c.name : "" })); }} />
+              <span />
+            </div>
+            <div className="sl">
+              <label htmlFor="main-tol">Tolerância</label>
+              <input type="range" id="main-tol" min={0} max={6} step={0.5} value={settings.mainTolerance} onChange={(e) => setSettings((s) => ({ ...s, mainTolerance: +e.target.value }))} />
+              <output>{settings.mainTolerance.toFixed(1)}</output>
+            </div>
+            <p className="note">
+              No sup, a main é o pick sempre que o draft não pesar mais que a tolerância contra ela (lane com peso 1,5, dados, comp, seu ADC e metade do risco de blind).
+              {decision.main ? ` Agora: ${decision.main.situation >= 0 ? "+" : ""}${decision.main.situation.toFixed(1)}, ${decision.main.kept ? "jogável" : "evitar"}.` : ""}
+            </p>
+          </div>
           <h2 style={{ marginTop: 16 }}>Peso de cada fator</h2>
           <div className="prof">
             {FACTORS.map(([id, l]) => (
