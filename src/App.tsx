@@ -7,6 +7,8 @@ import { PATCH, type SupKey } from "./engine/data";
 import { loadCatalog, norm, offlineCatalog, type Catalog } from "./lib/ddragon";
 import { inTauri, readChampSelect, readHistory, type Account, type LiveState } from "./lib/lcu";
 import { invoke } from "@tauri-apps/api/core";
+import { confidence, loadModel, predict, type TrainedModel } from "./engine/model";
+import { checkUpdate, installUpdate, type Pending } from "./lib/updater";
 import { buildStats, loadGames, mergeGames, overall, saveGames, type Game } from "./lib/stats";
 
 const RN: Record<Role, string> = { top: "Top", jg: "Jungle", mid: "Mid", adc: "ADC", sup: "Sup" };
@@ -29,7 +31,7 @@ export default function App() {
   const [cat, setCat] = useState<Catalog>(offlineCatalog);
   const [catErr, setCatErr] = useState(false);
   const [draft, setDraft] = useState<Draft>(() => ({ ally: empty(), enemy: empty(), bans: [] }));
-  const [settings, setSettings] = useStored<Settings>("helporo.settings6", { weights: DEFAULT_WEIGHTS, pool: DEFAULT_POOL, focus: [], lane: {}, backups: ["Sona", "Nami"], main: "Soraka", mainTolerance: 2, mainNoBlind: true, mainAvoid: ["Jarvan IV", "Rengar", "Nocturne"], mainWarn: ["Vi", "Malphite", "Warwick", "Skarner", "Hecarim", "Zac", "Kha'Zix", "Evelynn", "Fiddlesticks", "Kayn", "Qiyana", "Diana"] });
+  const [settings, setSettings] = useStored<Settings>("helporo.settings7", { weights: DEFAULT_WEIGHTS, pool: DEFAULT_POOL, focus: [], lane: {}, backups: ["Sona", "Nami"], main: "Soraka", mainTolerance: 2, mainNoBlind: true, mainAvoid: ["Jarvan IV", "Rengar", "Nocturne", "Pyke"], mainWarn: ["Vi", "Malphite", "Warwick", "Skarner", "Hecarim", "Zac", "Kha'Zix", "Evelynn", "Fiddlesticks", "Kayn", "Qiyana", "Diana"] });
   const [ui, setUi] = useStored("helporo.ui", { follow: true, role: "sup" as Role });
   const [live, setLive] = useState<LiveState | null>(null);
   const [banText, setBanText] = useState("");
@@ -43,6 +45,16 @@ export default function App() {
 
   useEffect(() => { loadCatalog().then(setCat).catch(() => setCatErr(true)); }, []);
   const [timerUrl, setTimerUrl] = useState("");
+  // modelo treinado: baixa ao abrir e de hora em hora (o treino roda uma vez por dia)
+  const [trained, setTrained] = useState<TrainedModel | null>(() => { try { return JSON.parse(localStorage.getItem("helporo.model") || "null"); } catch { return null; } });
+  useEffect(() => {
+    const get = () => loadModel().then((m) => { if (m) { setTrained(m); try { localStorage.setItem("helporo.model", JSON.stringify(m)); } catch { /* cheio */ } } });
+    get(); const id = setInterval(get, 60 * 60 * 1000); return () => clearInterval(id);
+  }, []);
+  // atualização do app
+  const [update, setUpdate] = useState<Pending | null>(null);
+  const [updating, setUpdating] = useState(false);
+  useEffect(() => { if (inTauri()) checkUpdate().then(setUpdate); }, []);
   const [phase, setPhase] = useState<string | null>(null);
   useEffect(() => {
     if (!inTauri()) return;
@@ -94,7 +106,9 @@ export default function App() {
   const flags = useMemo(() => (n: string | null) => (n ? cat.byName.get(norm(n))?.flags ?? "" : ""), [cat]);
   const draftForMe = useMemo(() => ({ ...draft, ally: { ...draft.ally, [myRole]: null } }), [draft, myRole]);
   const info = useMemo(() => (n: string) => cat.byName.get(norm(n)) ?? null, [cat]);
-  const decision = useMemo(() => decide(draftForMe, settings, flags, stats, myRole, info), [draftForMe, settings, flags, stats, myRole, info]);
+  const conf = trained ? confidence(trained) : 0;
+  const modelZ = useMemo(() => (trained && conf > 0 ? predict(trained, draftForMe) : null), [trained, conf, draftForMe]);
+  const decision = useMemo(() => decide(draftForMe, settings, flags, stats, myRole, info, modelZ, conf), [draftForMe, settings, flags, stats, myRole, info, modelZ, conf]);
   const results = decision.results;
   const risk = blindRisk(draftForMe, myRole);
   const allies = ROLES.filter((r) => r !== myRole).map((r) => draftForMe.ally[r]).filter(Boolean) as string[];
@@ -131,6 +145,14 @@ export default function App() {
         </div>
       </header>
 
+      {update && (
+        <div className="banner ok">
+          <b>Versão {update.version} disponível.</b> {update.body ? `${update.body} ` : ""}
+          <button className="ghost" disabled={updating} onClick={async () => { setUpdating(true); try { await installUpdate(update); } catch { setUpdating(false); } }}>
+            {updating ? "Baixando…" : "Atualizar e reiniciar"}
+          </button>
+        </div>
+      )}
       {!inTauri() && (
         <div className="banner">
           <b>Versão web, modo manual.</b> Ela não lê o cliente nem a partida: preencha o draft à mão. Pra seguir a seleção sozinho, use o app no Windows.
@@ -230,6 +252,12 @@ export default function App() {
           </p>
           <p className="note">{sync ? `Sincronizado às ${new Date(sync.at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}${sync.added ? `, ${sync.added} partida(s) nova(s)` : ""}. ` : ""}{games.length} partidas do cliente guardadas.</p>
           {inTauri() && <button className="ghost" onClick={syncHistory}>Sincronizar agora</button>}
+          <h2 style={{ marginTop: 16 }}>Modelo treinado</h2>
+          <p className="note">
+            {trained
+              ? `Treinado em ${trained.trainedAt ?? "?"} com ${trained.metrics.amostras_treino.toLocaleString("pt-BR")} jogos de sup (Mestre+ e Diamante 1, BR). AUC ${trained.metrics.auc_modelo.toFixed(3)}. ${conf > 0 ? `Peso atual: ${Math.round(conf * 100)}% (cresce com mais partidas).` : "Ainda aprendendo: não entra na nota até bater a média em jogos que não viu."}`
+              : "Ainda não tem modelo publicado. Ele aparece aqui sozinho depois da primeira rodada de treino no GitHub."}
+          </p>
           <h2 style={{ marginTop: 16 }}>Main</h2>
           <div className="prof">
             <div className="sl">

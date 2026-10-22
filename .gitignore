@@ -7,3 +7,4 @@ model/data/
 model/out/
 model/data_fake/
 __pycache__/
+src-tauri/updater.key

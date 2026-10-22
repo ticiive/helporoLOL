@@ -9,11 +9,11 @@ export type Team = Record<Role, string | null>;
 export interface Draft { ally: Team; enemy: Team; bans: string[] }
 
 export const FACTORS = [
-  ["lane", "Lane"], ["dados", "Dados"], ["comp", "Comp"], ["adc", "Seu ADC"], ["meta", "Meta"], ["voce", "Você"], ["blind", "Blind"],
+  ["lane", "Lane"], ["dados", "Dados"], ["comp", "Comp"], ["adc", "Seu ADC"], ["meta", "Meta"], ["voce", "Você"], ["blind", "Blind"], ["modelo", "Modelo"],
 ] as const;
 export type Factor = (typeof FACTORS)[number][0];
 export type Weights = Record<Factor, number>;
-export const DEFAULT_WEIGHTS: Weights = { lane: 1, dados: 1, comp: 1, adc: 1, meta: 0.6, voce: 1, blind: 1 };
+export const DEFAULT_WEIGHTS: Weights = { lane: 1, dados: 1, comp: 1, adc: 1, meta: 0.6, voce: 1, blind: 1, modelo: 1 };
 
 export interface Settings {
   weights: Weights;
@@ -173,7 +173,8 @@ function similarity(name: string, flags: Flags, info: Info, stats: Stats) {
   return { sim: sims.reduce((t, x) => t + x.j * Math.min(x.g, 30), 0) / wsum, like: sims[0].n };
 }
 
-export function decide(d: Draft, s: Settings, flags: Flags, stats: Stats, myRole: Role, info: Info = () => null): Decision {
+/** model: logit centrado de cada sup vindo do modelo treinado; conf: 0..1, quanto confiar nele */
+export function decide(d: Draft, s: Settings, flags: Flags, stats: Stats, myRole: Role, info: Info = () => null, model: Record<string, number> | null = null, conf = 0): Decision {
   const { ally: A, enemy: E } = d;
   const hf = (n: string | null, c: string) => !!n && flags(n).includes(c);
   const taken = new Set([...ROLES.map((r) => A[r]), ...ROLES.map((r) => E[r])].filter(Boolean) as string[]);
@@ -200,7 +201,7 @@ export function decide(d: Draft, s: Settings, flags: Flags, stats: Stats, myRole
   const results = cands.map((name): Result => {
     const k = isSup ? SUP_BY_NAME[name] ?? null : null;
     const fl = flags(name);
-    const f: Record<Factor, number> = { lane: 0, dados: 0, comp: 0, adc: 0, meta: 0, voce: 0, blind: 0 };
+    const f: Record<Factor, number> = { lane: 0, dados: 0, comp: 0, adc: 0, meta: 0, voce: 0, blind: 0, modelo: 0 };
     const why: [number, string][] = [];
     const add = (fac: Factor, v: number, txt: string, min = 0.5) => { f[fac] += v; if (Math.abs(v) >= min) why.push([v, txt]); };
 
@@ -264,11 +265,16 @@ export function decide(d: Draft, s: Settings, flags: Flags, stats: Stats, myRole
       else if (unk >= 0.45 && v < 0.35) why.push([0.6, "seguro de blind"]);
     }
 
-    const score = (Object.keys(f) as Factor[]).reduce((a, x) => a + f[x] * s.weights[x], 0);
+    if (isSup && model && conf > 0 && model[name] !== undefined) {
+      // 1 unidade de logit perto de 50% ~ 25 pontos de winrate; a escala aqui deixa ~6 pontos ~ 1 ponto de nota
+      const v = model[name] * 4 * conf;
+      add("modelo", v, `modelo (Mestre+): ${v > 0 ? "+" : ""}${(model[name] * 25).toFixed(1)} pts de winrate`, 0.4);
+    }
+    const score = (Object.keys(f) as Factor[]).reduce((a, x) => a + f[x] * (s.weights[x] ?? 1), 0);
     const status = d.bans.includes(name) ? "banned" : taken.has(name) ? "picked" : "ok";
     // winrate de jogo bom não salva uma lane que você sabe que é ruim
     const dadosSit = f.lane <= -1.5 ? Math.min(0, f.dados) : f.dados;
-    const situation = (f.lane < 0 ? 2 : 1.5) * f.lane * s.weights.lane + dadosSit * s.weights.dados + f.comp * s.weights.comp + f.adc * s.weights.adc + 0.5 * f.blind * s.weights.blind;
+    const situation = (f.lane < 0 ? 2 : 1.5) * f.lane * s.weights.lane + dadosSit * s.weights.dados + f.comp * s.weights.comp + f.adc * s.weights.adc + 0.5 * f.blind * s.weights.blind + f.modelo * (s.weights.modelo ?? 1);
     return { name, sup: k, score, f, why, games: p.g, status, situation };
   }).sort((a, b) => Number(a.status !== "ok") - Number(b.status !== "ok") || b.score - a.score);
 

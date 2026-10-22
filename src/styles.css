@@ -132,3 +132,5 @@ h1 span { color: var(--gold); }
 .banner { background: var(--panel); border: 1px solid var(--warn); border-radius: 8px; padding: 10px 14px; font-size: 13.5px; color: var(--muted); line-height: 1.5; }
 .banner b { color: var(--warn); }
 .banner code { color: var(--fg); background: var(--panel2); padding: 1px 6px; border-radius: 4px; }
+.banner.ok { border-color: var(--good); display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.banner.ok b { color: var(--good); }

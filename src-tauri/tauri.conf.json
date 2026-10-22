@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "helporoLOL",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "identifier": "com.ticiive.helporolol",
   "build": {
     "beforeDevCommand": "npm run dev",
@@ -20,13 +20,17 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; img-src 'self' https://ddragon.leagueoflegends.com data:; connect-src 'self' ipc: http://ipc.localhost https://ddragon.leagueoflegends.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com"
+      "csp": "default-src 'self'; img-src 'self' https://ddragon.leagueoflegends.com data:; connect-src 'self' ipc: http://ipc.localhost https://ddragon.leagueoflegends.com https://raw.githubusercontent.com https://github.com https://objects.githubusercontent.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com"
     }
   },
   "bundle": {
     "active": true,
     "targets": "all",
-    "windows": { "nsis": { "installMode": "currentUser" } },
+    "windows": {
+      "nsis": {
+        "installMode": "currentUser"
+      }
+    },
     "category": "Utility",
     "icon": [
       "icons/32x32.png",
@@ -34,6 +38,18 @@
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "createUpdaterArtifacts": true
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "COLE_A_CHAVE_PUBLICA_AQUI",
+      "endpoints": [
+        "https://github.com/ticiive/helporoLOL/releases/latest/download/latest.json"
+      ],
+      "windows": {
+        "installMode": "passive"
+      }
+    }
   }
 }

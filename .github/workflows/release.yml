@@ -23,12 +23,19 @@ jobs:
         with:
           workspaces: src-tauri
       - run: npm ci
+      - name: Chave pública do atualizador
+        shell: bash
+        run: node -e "const fs=require('fs');const f='src-tauri/tauri.conf.json';const c=JSON.parse(fs.readFileSync(f,'utf8'));c.plugins.updater.pubkey=fs.readFileSync('src-tauri/updater.key.pub','utf8').trim();fs.writeFileSync(f,JSON.stringify(c,null,2))"
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # assinatura das atualizações (o app só aceita update assinado com essa chave)
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           tagName: ${{ github.ref_type == 'tag' && github.ref_name || format('build-{0}', github.run_number) }}
           releaseName: helporoLOL ${{ github.ref_type == 'tag' && github.ref_name || format('build {0}', github.run_number) }}
           releaseBody: Baixe o instalador `_x64-setup.exe` abaixo. Primeira abertura no Windows, veja o README.
           releaseDraft: false
           prerelease: false
+          includeUpdaterJson: true

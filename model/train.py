@@ -246,7 +246,10 @@ def main(epochs=800):
     print(json.dumps(metrics, indent=1))
 
     p = {k: v.tolist() for k, v in model.p.items()}
-    (OUT / "model.json").write_text(json.dumps({"champs": champs, "sups": SUPS, "tags": TAG_LIST, "k": K, "params": p, "metrics": metrics}))
+    tag_idx = {c: [int(t) for t in np.nonzero(M[i])[0]] for i, c in enumerate(champs)}
+    import datetime
+    (OUT / "model.json").write_text(json.dumps({"champs": champs, "sups": SUPS, "tags": TAG_LIST, "tagIdx": tag_idx, "k": K, "params": p,
+                                                "metrics": metrics, "trainedAt": datetime.datetime.utcnow().strftime("%Y-%m-%d")}))
     (OUT / "report.md").write_text(report(model, champs, counts, metrics, M, lane_set, adc_set))
     print("salvo em model/out/")
 
