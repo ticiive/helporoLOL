@@ -7,7 +7,7 @@
  * você joga com o app aberto, mais o histórico cresce.
  */
 import type { Role } from "../engine/engine";
-import { BOTS, JUNGLERS, SUPPORTS } from "../engine/champions";
+import { BOTS, JUNGLERS, MIDS, SUPPORTS } from "../engine/champions";
 
 export const OWNER = { gameName: "ticiive", tagLine: "lett" };
 export const SEED_UNTIL = Date.UTC(2026, 9, 22, 13, 0); // 22/10/2026 10h (Brasília)
@@ -20,10 +20,15 @@ const SEED: Record<string, [number, number]> = {
   Morgana: [1, 0], Poppy: [0, 1], Nautilus: [0, 1], Syndra: [0, 1], Veigar: [0, 1], Heimerdinger: [0, 1], Qiyana: [0, 1],
 };
 
-/** A base não tem rota; adivinha pelo campeão (mesma lógica das rotas do inimigo). */
+/** Rotas que eu já sei que joguei fora do padrão (a base do op.gg não separa por rota). */
+const SEED_ROLE: Record<string, Role> = { Lux: "mid" };
+
+/** Rota padrão do campeão, quando não há partidas do cliente pra dividir a base. */
 function seedRole(name: string): Role {
+  if (SEED_ROLE[name]) return SEED_ROLE[name];
   if (SUPPORTS.has(name)) return "sup";
   if (JUNGLERS.has(name)) return "jg";
+  if (MIDS.has(name)) return "mid";
   if (BOTS.has(name)) return "adc";
   return "mid";
 }
@@ -51,7 +56,24 @@ export function buildStats(games: Game[], useSeed: boolean): Stats {
     c.w += w; c.l += l;
     if (role) { const r = (c.byRole[role] ??= { w: 0, l: 0 }); r.w += w; r.l += l; }
   };
-  if (useSeed) for (const [n, [w, l]] of Object.entries(SEED)) put(n, seedRole(n), w, l);
+  if (useSeed) {
+    // Divide a base entre as rotas na mesma proporção das partidas do cliente anteriores à base
+    // (ex.: se 20% das suas Sorakas lidas do cliente foram mid, 20% da base vai pro mid).
+    const before = games.filter((g) => g.t <= SEED_UNTIL && g.role);
+    for (const [n, [w, l]] of Object.entries(SEED)) {
+      const mine = before.filter((g) => g.champ === n);
+      if (!mine.length) { put(n, seedRole(n), w, l); continue; }
+      const byRole = new Map<Role, number>();
+      mine.forEach((g) => byRole.set(g.role!, (byRole.get(g.role!) ?? 0) + 1));
+      let rw = w, rl = l;
+      const entries = [...byRole.entries()].sort((a, b) => b[1] - a[1]);
+      entries.forEach(([role, c], i) => {
+        const last = i === entries.length - 1;
+        const pw = last ? rw : Math.round((w * c) / mine.length), pl = last ? rl : Math.round((l * c) / mine.length);
+        put(n, role, pw, pl); rw -= pw; rl -= pl;
+      });
+    }
+  }
   for (const g of games) if (!useSeed || g.t > SEED_UNTIL) put(g.champ, g.role, g.win ? 1 : 0, g.win ? 0 : 1);
   return s;
 }

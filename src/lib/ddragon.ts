@@ -4,7 +4,7 @@
  */
 import { CH, fallbackFlags } from "../engine/champions";
 
-export interface Champ { name: string; id: string; key: number; tags: string[]; flags: string }
+export interface Champ { name: string; id: string; key: number; tags: string[]; flags: string; diff: number; ranged: boolean }
 export interface Catalog { version: string; byName: Map<string, Champ>; byKey: Map<number, Champ>; list: Champ[] }
 
 const CDN = "https://ddragon.leagueoflegends.com";
@@ -14,8 +14,9 @@ export async function loadCatalog(): Promise<Catalog> {
   const versions: string[] = await fetch(`${CDN}/api/versions.json`).then((r) => r.json());
   const version = versions[0];
   const json = await fetch(`${CDN}/cdn/${version}/data/en_US/champion.json`).then((r) => r.json());
-  const list: Champ[] = Object.values(json.data as Record<string, { id: string; key: string; name: string; tags: string[] }>).map((c) => ({
+  const list: Champ[] = Object.values(json.data as Record<string, { id: string; key: string; name: string; tags: string[]; info: { difficulty: number }; stats: { attackrange: number } }>).map((c) => ({
     name: c.name, id: c.id, key: +c.key, tags: c.tags, flags: CH[c.name] ?? fallbackFlags(c.tags),
+    diff: c.info?.difficulty ?? 5, ranged: (c.stats?.attackrange ?? 0) > 300,
   }));
   list.sort((a, b) => a.name.localeCompare(b.name));
   return { version, list, byName: new Map(list.map((c) => [norm(c.name), c])), byKey: new Map(list.map((c) => [c.key, c])) };
@@ -23,7 +24,7 @@ export async function loadCatalog(): Promise<Catalog> {
 
 /** Catálogo mínimo, sem ícones, pra quando não houver internet. */
 export function offlineCatalog(): Catalog {
-  const list: Champ[] = Object.keys(CH).sort().map((name, i) => ({ name, id: name.replace(/[^A-Za-z]/g, ""), key: -1 - i, tags: [], flags: CH[name] }));
+  const list: Champ[] = Object.keys(CH).sort().map((name, i) => ({ name, id: name.replace(/[^A-Za-z]/g, ""), key: -1 - i, tags: [], flags: CH[name], diff: 5, ranged: !CH[name].includes("M") }));
   return { version: "", list, byName: new Map(list.map((c) => [norm(c.name), c])), byKey: new Map() };
 }
 

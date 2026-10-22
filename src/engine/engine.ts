@@ -1,5 +1,6 @@
 import { LANE, META, MU, SUPS, SUP_KEYS, type SupKey } from "./data";
 import type { Stats } from "../lib/stats";
+import { BOTS, JUNGLERS, MIDS, SUPPORTS, TOPS } from "./champions";
 
 export const ROLES = ["top", "jg", "mid", "adc", "sup"] as const;
 export type Role = (typeof ROLES)[number];
@@ -31,6 +32,10 @@ export interface Result {
 }
 
 type Flags = (name: string | null) => string;
+/** Dados extras do campeão (Data Dragon): tags oficiais, dificuldade 1-10 e se é ranged. */
+export interface ChampInfo { tags: string[]; diff: number; ranged: boolean }
+type Info = (name: string) => ChampInfo | null;
+const ROLE_LIST: Record<Role, Set<string>> = { top: TOPS, jg: JUNGLERS, mid: MIDS, adc: BOTS, sup: SUPPORTS };
 const SUP_BY_NAME = Object.fromEntries(SUP_KEYS.map((k) => [SUPS[k], k])) as Record<string, SupKey>;
 
 // ---- tabelas específicas dos 6 sups principais (ajuste aqui) ----
@@ -126,12 +131,32 @@ function personal(stats: Stats, name: string, role: Role) {
   return { g, wr: g ? w / g : null, pts };
 }
 
-export function candidates(role: Role, s: Settings, stats: Stats): string[] {
-  const fromStats = Object.entries(stats).filter(([, c]) => { const r = c.byRole[role]; return r && r.w + r.l >= (role === "sup" ? 5 : 2); }).map(([n]) => n);
-  return [...new Set([...s.pool[role], ...fromStats])];
+/** Jogos seus numa rota, somando todos os campeões. */
+export function roleGames(stats: Stats, role: Role) {
+  return Object.values(stats).reduce((a, c) => a + (c.byRole[role] ? c.byRole[role]!.w + c.byRole[role]!.l : 0), 0);
 }
 
-export function decide(d: Draft, s: Settings, flags: Flags, stats: Stats, myRole: Role): Result[] {
+/** Candidatos: seu pool manual + seus campeões na rota; numa rota com poucos jogos seus, entram também os campeões comuns da rota. */
+export function candidates(role: Role, s: Settings, stats: Stats): string[] {
+  const fromStats = Object.entries(stats).filter(([, c]) => { const r = c.byRole[role]; return r && r.w + r.l >= (role === "sup" ? 5 : 1); }).map(([n]) => n);
+  const explore = roleGames(stats, role) < 40 ? [...ROLE_LIST[role]] : [];
+  return [...new Set([...s.pool[role], ...fromStats, ...explore])];
+}
+
+/** O quanto um campeão se parece com os que você joga (características, tags oficiais e alcance). */
+function similarity(name: string, flags: Flags, info: Info, stats: Stats) {
+  const tok = (n: string) => { const i = info(n); return new Set([...flags(n).replace(/[GSH]/g, ""), ...(i?.tags ?? []), i ? (i.ranged ? "rng" : "mel") : ""].filter(Boolean)); };
+  const a = tok(name);
+  const sims = Object.entries(stats).filter(([n, c]) => n !== name && c.w + c.l >= 3).map(([n, c]) => {
+    const b = tok(n); const inter = [...a].filter((x) => b.has(x)).length;
+    return { n, j: inter / (a.size + b.size - inter || 1), g: c.w + c.l };
+  }).sort((x, y) => y.j - x.j).slice(0, 3);
+  if (!sims.length) return { sim: 0.3, like: null as string | null };
+  const wsum = sims.reduce((t, x) => t + Math.min(x.g, 30), 0);
+  return { sim: sims.reduce((t, x) => t + x.j * Math.min(x.g, 30), 0) / wsum, like: sims[0].n };
+}
+
+export function decide(d: Draft, s: Settings, flags: Flags, stats: Stats, myRole: Role, info: Info = () => null): Result[] {
   const { ally: A, enemy: E } = d;
   const hf = (n: string | null, c: string) => !!n && flags(n).includes(c);
   const taken = new Set([...ROLES.map((r) => A[r]), ...ROLES.map((r) => E[r])].filter(Boolean) as string[]);
@@ -189,7 +214,16 @@ export function decide(d: Draft, s: Settings, flags: Flags, stats: Stats, myRole
     const p = personal(stats, name, myRole);
     f.voce = p.pts;
     if (p.g) why.push([p.wr! >= 0.5 ? Math.max(0.6, p.pts) : Math.min(-0.6, (p.wr! - 0.5) * 30), `seu histórico: ${Math.round(p.wr! * 100)}% em ${p.g} jogos`]);
-    else why.push([-0.6, "sem jogos seus nessa rota"]);
+    // Pouca experiência com o campeão na rota: pesa o quanto ele lembra os seus e se é fácil de pegar
+    if (p.g < 5) {
+      const fam = p.g / 5, sm = similarity(name, flags, info, stats), diff = info(name)?.diff ?? 5;
+      const simPts = (sm.sim - 0.35) * 6 * (1 - fam), easyPts = (5 - diff) * 0.35 * (1 - fam);
+      f.voce += simPts + easyPts;
+      if (sm.like && sm.sim >= 0.45) why.push([Math.max(0.6, simPts), `parecido com ${sm.like}, que você joga`]);
+      else if (simPts <= -0.6) why.push([simPts, "estilo bem diferente do que você joga"]);
+      if (diff <= 4) why.push([Math.max(0.6, easyPts), `fácil de pegar (dificuldade ${diff}/10)`]);
+      else if (diff >= 7) why.push([Math.min(-0.6, easyPts), `difícil de aprender (dificuldade ${diff}/10)`]);
+    }
     if (s.focus.includes(name)) { f.voce += 1.5; why.push([1.5, "você quer treinar"]); }
 
     if (unk > 0) {

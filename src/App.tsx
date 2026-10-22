@@ -82,12 +82,13 @@ export default function App() {
   const tot = overall(stats);
   const flags = useMemo(() => (n: string | null) => (n ? cat.byName.get(norm(n))?.flags ?? "" : ""), [cat]);
   const draftForMe = useMemo(() => ({ ...draft, ally: { ...draft.ally, [myRole]: null } }), [draft, myRole]);
-  const results = useMemo(() => decide(draftForMe, settings, flags, stats, myRole), [draftForMe, settings, flags, stats, myRole]);
+  const info = useMemo(() => (n: string) => cat.byName.get(norm(n)) ?? null, [cat]);
+  const results = useMemo(() => decide(draftForMe, settings, flags, stats, myRole, info), [draftForMe, settings, flags, stats, myRole, info]);
   const risk = blindRisk(draftForMe, myRole);
   const allies = ROLES.filter((r) => r !== myRole).map((r) => draftForMe.ally[r]).filter(Boolean) as string[];
   const enemies = ROLES.map((r) => draft.enemy[r]).filter(Boolean) as string[];
   const top = results[0]?.status === "ok" ? results[0] : null;
-  const rolePool = candidates(myRole, settings, stats);
+  const rolePool = candidates(myRole, settings, stats).filter((n) => settings.pool[myRole].includes(n) || (stats[n]?.byRole[myRole]?.w ?? 0) + (stats[n]?.byRole[myRole]?.l ?? 0) > 0);
 
   const setSlot = (side: "ally" | "enemy", r: Role, v: string | null) => setDraft((d) => ({ ...d, [side]: { ...d[side], [r]: v } }));
   const setLane = (k: SupKey, v: number | null) => setSettings((s) => {
@@ -121,7 +122,7 @@ export default function App() {
         {ROLES.map((r) => (
           <button key={r} aria-pressed={myRole === r} disabled={following && live?.status === "active" && !!live.draft.myRole} onClick={() => setUi({ ...ui, role: r })}>{RN[r]}</button>
         ))}
-        {myRole !== "sup" && <span className="note fillnote">Fill: sugestão pelos seus campeões nessa rota e pela comp.</span>}
+        {myRole !== "sup" && <span className="note fillnote">Fill: pesa seus jogos na rota, a comp e, onde você tem poucos jogos, campeões fáceis e parecidos com os seus.</span>}
       </div>
 
       <section className="board">
