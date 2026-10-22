@@ -25,6 +25,8 @@ export interface Settings {
   main: string;
   /** quanto o draft pode pesar contra a main antes de trocar (0 = troca fácil, 5 = só em desastre) */
   mainTolerance: number;
+  /** campeões contra os quais você não joga a main, aconteça o que acontecer */
+  mainAvoid: string[];
   /** correções de lane: chave `${sup}|${inimigo}` */
   lane: Record<string, number>;
 }
@@ -251,6 +253,8 @@ export function decide(d: Draft, s: Settings, flags: Flags, stats: Stats, myRole
   // Regra da main: ela é o pick sempre que o draft não pesar demais contra ela.
   const main = myRole === "sup" ? results.find((r) => r.name === s.main && r.status === "ok") : undefined;
   if (!main) return { results, main: null };
+  const avoidHit = enemies.filter((n) => s.mainAvoid.includes(n));
+  if (avoidHit.length) { main.situation! -= 3 * avoidHit.length; main.why.push([-3, `${avoidHit.join(", ")}: você não joga ${main.name} contra`]); }
   const kept = main.situation! >= -s.mainTolerance;
   const ordered = kept ? [main, ...results.filter((r) => r !== main)] : results;
   if (kept) main.why.push([3, results[0] === main ? `${main.name} é sua main e encaixa bem` : `jogável de ${main.name}: sua main fica`]);

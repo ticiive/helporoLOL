@@ -28,11 +28,12 @@ export default function App() {
   const [cat, setCat] = useState<Catalog>(offlineCatalog);
   const [catErr, setCatErr] = useState(false);
   const [draft, setDraft] = useState<Draft>(EXAMPLE);
-  const [settings, setSettings] = useStored<Settings>("helporo.settings2", { weights: DEFAULT_WEIGHTS, pool: DEFAULT_POOL, focus: ["Nami"], lane: {}, main: "Soraka", mainTolerance: 2 });
+  const [settings, setSettings] = useStored<Settings>("helporo.settings2", { weights: DEFAULT_WEIGHTS, pool: DEFAULT_POOL, focus: ["Nami"], lane: {}, main: "Soraka", mainTolerance: 2, mainAvoid: ["Jarvan IV", "Rengar", "Nocturne"] });
   const [ui, setUi] = useStored("helporo.ui", { follow: true, role: "sup" as Role });
   const [live, setLive] = useState<LiveState | null>(null);
   const [banText, setBanText] = useState("");
   const [poolText, setPoolText] = useState("");
+  const [avoidText, setAvoidText] = useState("");
   const [account, setAccount] = useState<Account | null>(null);
   const accKey = account ? `${account.gameName}#${account.tagLine}` : OWNER_ACC;
   const [games, setGames] = useState<Game[]>(() => loadGames(OWNER_ACC));
@@ -217,6 +218,18 @@ export default function App() {
               <label htmlFor="main-tol">Tolerância</label>
               <input type="range" id="main-tol" min={0} max={6} step={0.5} value={settings.mainTolerance} onChange={(e) => setSettings((s) => ({ ...s, mainTolerance: +e.target.value }))} />
               <output>{settings.mainTolerance.toFixed(1)}</output>
+            </div>
+            <div className="lbl">Não jogo a main contra</div>
+            <div className="banrow">
+              {settings.mainAvoid.map((n) => (
+                <button key={n} className="avoid" title={`Tirar ${n}`} onClick={() => setSettings((s) => ({ ...s, mainAvoid: s.mainAvoid.filter((x) => x !== n) }))}>
+                  <Icon cat={cat} champ={cat.byName.get(norm(n)) ?? null} size={30} ring="var(--bad)" /><span>{n}</span>
+                </button>
+              ))}
+              <input className="banin" list="champ-list" placeholder="+ campeão" value={avoidText} onChange={(e) => {
+                const c = cat.byName.get(norm(e.target.value));
+                if (c) { setSettings((s) => ({ ...s, mainAvoid: s.mainAvoid.includes(c.name) ? s.mainAvoid : [...s.mainAvoid, c.name] })); setAvoidText(""); } else setAvoidText(e.target.value);
+              }} />
             </div>
             <p className="note">
               No sup, a main é o pick sempre que o draft não pesar mais que a tolerância contra ela (lane com peso 1,5, dados, comp, seu ADC e metade do risco de blind).
