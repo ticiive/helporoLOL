@@ -6,6 +6,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { BOTS, JUNGLERS, SUPPORTS, TOPS } from "../engine/champions";
 import { ROLES, type Role, type Team } from "../engine/engine";
 import type { Catalog } from "./ddragon";
+import { OWNER, type Game } from "./stats";
 
 export const inTauri = () => typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 
@@ -49,8 +50,9 @@ export async function readChampSelect(cat: Catalog): Promise<LiveState> {
     if (!name) continue;
     if (role && !ally[role]) ally[role] = name; else unplaced.push(name);
   }
-  for (const r of ROLES) if (r !== "sup" && !ally[r] && unplaced.length) ally[r] = unplaced.shift()!;
-  ally.sup = null; // o slot de sup é o seu
+  const mine: Role = myRole ?? "sup";
+  for (const r of ROLES) if (r !== mine && !ally[r] && unplaced.length) ally[r] = unplaced.shift()!;
+  ally[mine] = null; // esse slot é o seu
 
   const enemyNames = s.theirTeam.map((c) => nameOf(c.championId)).filter(Boolean) as string[];
   const enemyHasPos = s.theirTeam.some((c) => POS[c.assignedPosition ?? ""]);
@@ -63,4 +65,49 @@ export async function readChampSelect(cat: Catalog): Promise<LiveState> {
   const bans = [...banIds].map((id) => nameOf(id)).filter(Boolean) as string[];
 
   return { status: "active", draft: { ally, enemy, bans, myHover, myRole } };
+}
+
+// ---------- histórico pessoal ----------
+interface HistGame { gameId: number; gameCreation: number; queueId: number; participants?: { championId: number; stats?: { win?: boolean }; timeline?: { lane?: string; role?: string } }[] }
+const RANKED = new Set([420, 440]); // solo/duo e flex
+
+function roleOf(lane?: string, role?: string, champ?: string): Role | null {
+  switch ((lane || "").toUpperCase()) {
+    case "TOP": return "top";
+    case "JUNGLE": return "jg";
+    case "MID": case "MIDDLE": return "mid";
+    case "BOTTOM": case "BOT": {
+      const r = (role || "").toUpperCase();
+      if (r.includes("SUPPORT")) return "sup";
+      if (r.includes("CARRY")) return "adc";
+      return champ && SUPPORTS.has(champ) ? "sup" : "adc";
+    }
+  }
+  return null;
+}
+
+export interface Account { gameName: string; tagLine: string; isOwner: boolean }
+
+/** Lê a conta logada e as partidas ranqueadas recentes do próprio cliente. */
+export async function readHistory(cat: Catalog): Promise<{ account: Account; games: Game[] } | null> {
+  const sum = await invoke<{ gameName?: string; tagLine?: string } | null>("current_summoner");
+  if (!sum) return null;
+  const account: Account = {
+    gameName: sum.gameName ?? "", tagLine: sum.tagLine ?? "",
+    isOwner: (sum.gameName ?? "").toLowerCase() === OWNER.gameName && (sum.tagLine ?? "").toLowerCase() === OWNER.tagLine,
+  };
+  const games: Game[] = [];
+  for (const [beg, end] of [[0, 99], [100, 199]]) {
+    const h = await invoke<{ games?: { games?: HistGame[] } } | null>("match_history", { beg, end });
+    const list = h?.games?.games ?? [];
+    for (const g of list) {
+      const p = g.participants?.[0];
+      if (!p || !RANKED.has(g.queueId)) continue;
+      const champ = cat.byKey.get(p.championId)?.name;
+      if (!champ) continue;
+      games.push({ id: g.gameId, t: g.gameCreation, champ, role: roleOf(p.timeline?.lane, p.timeline?.role, champ), win: !!p.stats?.win });
+    }
+    if (list.length < 90) break;
+  }
+  return { account, games };
 }

@@ -76,26 +76,47 @@ fn creds_from_lockfile() -> Option<Creds> {
     None
 }
 
-#[tauri::command]
-pub async fn champ_select() -> Result<ChampSelect, String> {
+/// GET num endpoint do cliente. `None` = cliente fechado; `Some(Err(status))` = resposta de erro.
+async fn get(path: &str) -> Result<Option<Result<serde_json::Value, u16>>, String> {
     let Some(c) = creds_from_process().or_else(creds_from_lockfile) else {
-        return Ok(ChampSelect::Offline);
+        return Ok(None);
     };
     // O certificado do cliente é autoassinado; a conexão é só local (127.0.0.1)
     let client = reqwest::Client::builder()
         .danger_accept_invalid_certs(true)
-        .timeout(std::time::Duration::from_secs(3))
+        .timeout(std::time::Duration::from_secs(8))
         .build()
         .map_err(|e| e.to_string())?;
     let auth = STANDARD.encode(format!("riot:{}", c.password));
-    let url = format!("https://127.0.0.1:{}/lol-champ-select/v1/session", c.port);
+    let url = format!("https://127.0.0.1:{}{}", c.port, path);
     let res = match client.get(&url).header("Authorization", format!("Basic {auth}")).send().await {
         Ok(r) => r,
-        Err(_) => return Ok(ChampSelect::Offline),
+        Err(_) => return Ok(None),
     };
     if !res.status().is_success() {
-        return Ok(ChampSelect::Idle);
+        return Ok(Some(Err(res.status().as_u16())));
     }
-    let session = res.json::<serde_json::Value>().await.map_err(|e| e.to_string())?;
-    Ok(ChampSelect::Active { session })
+    Ok(Some(Ok(res.json::<serde_json::Value>().await.map_err(|e| e.to_string())?)))
+}
+
+#[tauri::command]
+pub async fn champ_select() -> Result<ChampSelect, String> {
+    Ok(match get("/lol-champ-select/v1/session").await? {
+        None => ChampSelect::Offline,
+        Some(Err(_)) => ChampSelect::Idle,
+        Some(Ok(session)) => ChampSelect::Active { session },
+    })
+}
+
+/// Conta logada no cliente (nome, tag, puuid). `null` se o cliente estiver fechado.
+#[tauri::command]
+pub async fn current_summoner() -> Result<Option<serde_json::Value>, String> {
+    Ok(get("/lol-summoner/v1/current-summoner").await?.and_then(|r| r.ok()))
+}
+
+/// Histórico recente da conta logada (até ~100 partidas por chamada).
+#[tauri::command]
+pub async fn match_history(beg: u32, end: u32) -> Result<Option<serde_json::Value>, String> {
+    let path = format!("/lol-match-history/v1/products/lol/current-summoner/matches?begIndex={beg}&endIndex={end}");
+    Ok(get(&path).await?.and_then(|r| r.ok()))
 }

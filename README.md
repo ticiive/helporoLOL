@@ -1,6 +1,6 @@
 # helporoLOL
 
-Assistente de draft pra suporte (meu próprio Porofessor). Lê a seleção de campeões direto do cliente do LoL e sugere entre Soraka, Sona, Nami, Janna, Lulu e Milio, explicando a nota.
+Assistente de draft (meu próprio Porofessor). Lê a seleção de campeões e o meu histórico de partidas direto do cliente do LoL e sugere o pick explicando a nota: no sup, com dados de matchup de Soraka, Sona, Nami, Janna, Lulu e Milio; no fill, pelos campeões que eu já joguei naquela rota.
 
 ## Como a sugestão é calculada
 
@@ -13,7 +13,7 @@ Cada sup recebe uma nota pela soma de sete fatores, cada um com peso ajustável 
 | Comp | Ameaças do time inimigo (dive, assassinos, hooks, poke, AoE) e o que falta no meu time (frontline, engage, dano mágico) |
 | Seu ADC | Sinergia com hipercarry ou ADC de lane agressiva |
 | Meta | Tier e winrate da patch |
-| Conforto | Bônus pros meus champs principais |
+| Você | Meu histórico com o campeão naquela rota (winrate puxado pro 50% com poucos jogos + conforto pelo volume), lido do cliente e atualizado sozinho; ★ dá bônus pra quem eu quero treinar |
 | Blind | Penalidade quando o bot inimigo ainda não apareceu, proporcional a quantos counters fortes cada sup tem |
 
 Lane e Dados são separados de propósito: Soraka tem 52% de winrate de jogo contra Nautilus, mas a lane é muito difícil.
@@ -25,7 +25,8 @@ src/engine/champions.ts   características de cada campeão (flags)
 src/engine/data.ts        snapshot do Lolalytics + tabela de lane
 src/engine/engine.ts      motor de decisão (pesos ficam no topo do arquivo)
 src/lib/ddragon.ts        ícones e lista de campeões (Data Dragon, CDN oficial da Riot)
-src/lib/lcu.ts            converte a sessão do cliente em draft
+src/lib/lcu.ts            converte a sessão do cliente em draft e lê o histórico
+src/lib/stats.ts          base da temporada + partidas guardadas por conta
 src-tauri/src/lcu.rs      lê a API local do cliente (porta e senha do processo ou do lockfile)
 ```
 
