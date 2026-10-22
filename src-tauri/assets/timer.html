@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>helporoLOL Timer</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@600;700&family=IBM+Plex+Sans:wght@400;500&display=swap">
+<style>
+/* Timer manual: uma linha por inimigo, três quadrados (ult e os dois feitiços). Toque = começa; toque de novo = cancela. */
+:root { --bg:#0a0f16; --panel:#111923; --panel2:#18222e; --fg:#e6ecf2; --muted:#8a99a9; --line:#243140; --gold:#d4a84a; --red:#e0574f; --good:#5cc086;
+  --display:"Chakra Petch",system-ui,sans-serif; --body:"IBM Plex Sans",system-ui,sans-serif; color-scheme:dark; }
+* { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+html,body { margin:0; background:var(--bg); color:var(--fg); font-family:var(--body); }
+.wrap { max-width:560px; margin:0 auto; padding:max(14px,env(safe-area-inset-top)) max(14px,env(safe-area-inset-right)) 24px max(14px,env(safe-area-inset-left)); display:flex; flex-direction:column; gap:10px; }
+header { display:flex; justify-content:space-between; align-items:baseline; gap:8px; }
+h1 { font-family:var(--display); font-size:20px; margin:0; letter-spacing:.04em; } h1 span { color:var(--gold); }
+.st { font-size:12.5px; color:var(--muted); }
+.row { display:grid; grid-template-columns:64px repeat(3, minmax(0,1fr)); gap:8px; align-items:center; background:var(--panel); border:1px solid var(--line); border-left:3px solid var(--red); border-radius:8px; padding:8px; }
+.champ { display:flex; flex-direction:column; align-items:center; gap:3px; font-size:11px; color:var(--muted); text-align:center; }
+.champ img, .champ .ph { width:52px; height:52px; border-radius:50%; border:2px solid var(--line); object-fit:cover; background:var(--panel2); }
+.sq { position:relative; aspect-ratio:1; max-height:96px; border-radius:8px; border:1px solid var(--line); background:var(--panel2) center/cover no-repeat; cursor:pointer; overflow:hidden; display:grid; place-items:center; user-select:none; touch-action:manipulation; }
+.sq .lab { position:absolute; left:4px; bottom:3px; font-size:10.5px; font-weight:500; color:#fff; text-shadow:0 1px 2px #000; }
+.sq .cd { position:absolute; inset:0; display:none; place-items:center; background:rgba(40,46,54,.82); font-family:var(--display); font-weight:700; font-size:clamp(18px,6vw,26px); font-variant-numeric:tabular-nums; }
+.sq.run .cd { display:grid; }
+.sq.ready { box-shadow:0 0 0 2px var(--good); }
+.sq.locked { opacity:.35; cursor:default; }
+.sq:focus-visible { outline:2px solid var(--gold); outline-offset:2px; }
+.empty { color:var(--muted); font-size:14px; background:var(--panel); border:1px dashed var(--line); border-radius:8px; padding:18px; text-align:center; line-height:1.5; }
+.empty button { margin-top:10px; font:inherit; font-size:13px; background:var(--panel2); color:var(--fg); border:1px solid var(--line); border-radius:6px; padding:6px 12px; cursor:pointer; }
+.note { font-size:12px; color:var(--muted); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header><h1>helporo<span>LOL</span> timer</h1><span class="st" id="st">conectando…</span></header>
+  <div id="list"><div class="empty">Procurando a partida…</div></div>
+  <p class="note">Toque quando VIR o feitiço ou o ult sendo usado. Toque de novo pra cancelar. Tempos base, sem runa ou item. O ult usa o nível atual do campeão.</p>
+</div>
+<script>
+const CDN = "https://ddragon.leagueoflegends.com";
+const $ = (id) => document.getElementById(id);
+let V = "", CHAMPS = {}, SPELLS = {}, ULT = {}, enemies = [], timers = {};
+const demo = new URLSearchParams(location.search).has("demo");
+
+async function boot() {
+  try {
+    V = (await (await fetch(`${CDN}/api/versions.json`)).json())[0];
+    const [c, s] = await Promise.all([fetch(`${CDN}/cdn/${V}/data/en_US/champion.json`), fetch(`${CDN}/cdn/${V}/data/en_US/summoner.json`)].map((p) => p.then((r) => r.json())));
+    CHAMPS = c.data; SPELLS = s.data;
+  } catch { $("st").textContent = "sem internet pros ícones"; }
+  poll(); setInterval(poll, 5000);
+  try { await navigator.wakeLock?.request("screen"); } catch {}
+}
+
+// "game_character_displayname_MonkeyKing" -> "MonkeyKing"; "GeneratedTip_SummonerSpell_SummonerFlash_DisplayName" -> "SummonerFlash"
+const champId = (raw) => (raw || "").replace("game_character_displayname_", "");
+const spellId = (raw) => ((raw || "").match(/SummonerSpell_(\w+?)_DisplayName/) || [])[1] || "";
+
+async function ultCd(id) {
+  if (ULT[id]) return ULT[id];
+  try { const j = await (await fetch(`${CDN}/cdn/${V}/data/en_US/champion/${id}.json`)).json(); ULT[id] = j.data[id].spells[3].cooldown; }
+  catch { ULT[id] = [120, 100, 80]; }
+  return ULT[id];
+}
+
+async function poll() {
+  let data;
+  if (demo) data = { inGame: true, me: "eu#br1", players: [
+    { riotId: "eu#br1", team: "ORDER", champ: "game_character_displayname_Soraka", level: 9, spell1: "x_SummonerSpell_SummonerFlash_DisplayName", spell2: "x_SummonerSpell_SummonerDot_DisplayName" },
+    { riotId: "a", team: "CHAOS", champ: "game_character_displayname_Garen", level: 11, spell1: "x_SummonerSpell_SummonerFlash_DisplayName", spell2: "x_SummonerSpell_SummonerTeleport_DisplayName" },
+    { riotId: "b", team: "CHAOS", champ: "game_character_displayname_LeeSin", level: 10, spell1: "x_SummonerSpell_SummonerSmite_DisplayName", spell2: "x_SummonerSpell_SummonerFlash_DisplayName" },
+    { riotId: "c", team: "CHAOS", champ: "game_character_displayname_Ahri", level: 10, spell1: "x_SummonerSpell_SummonerFlash_DisplayName", spell2: "x_SummonerSpell_SummonerDot_DisplayName" },
+    { riotId: "d", team: "CHAOS", champ: "game_character_displayname_Jinx", level: 9, spell1: "x_SummonerSpell_SummonerFlash_DisplayName", spell2: "x_SummonerSpell_SummonerHeal_DisplayName" },
+    { riotId: "e", team: "CHAOS", champ: "game_character_displayname_Thresh", level: 5, spell1: "x_SummonerSpell_SummonerFlash_DisplayName", spell2: "x_SummonerSpell_SummonerExhaust_DisplayName" }] };
+  else { try { data = await (await fetch("/players", { cache: "no-store" })).json(); } catch { data = null; } }
+
+  if (!data) { $("st").textContent = "helporoLOL fechado no PC"; return render([]); }
+  if (!data.inGame) { $("st").textContent = "esperando partida"; return render([]); }
+  const me = data.players.find((p) => (p.riotId || "").toLowerCase() === (data.me || "").toLowerCase());
+  const mine = me ? me.team : "ORDER";
+  const list = data.players.filter((p) => p.team !== mine);
+  for (const p of list) p.ult = await ultCd(champId(p.champ));
+  $("st").textContent = demo ? "demonstração" : "em partida";
+  render(list);
+}
+
+function render(list) {
+  const key = list.map((p) => p.champ + p.spell1 + p.spell2).join("|");
+  if (key !== render.key) {
+    render.key = key; enemies = list;
+    if (!list.length) {
+      $("list").innerHTML = `<div class="empty">Abra uma partida com o helporoLOL rodando no PC.<br><button onclick="location.search='?demo'">Ver demonstração</button></div>`;
+      return;
+    }
+    $("list").innerHTML = list.map((p, i) => {
+      const id = champId(p.champ), name = CHAMPS[id]?.name ?? id;
+      const sq = (slot, img, label) => `<div class="sq" role="button" tabindex="0" id="sq-${i}-${slot}" data-i="${i}" data-slot="${slot}" style="${img ? `background-image:url(${img})` : ""}"><span class="lab">${label}</span><span class="cd"></span></div>`;
+      const spell = (raw) => { const s = SPELLS[spellId(raw)]; return [s && V ? `${CDN}/cdn/${V}/img/spell/${s.image.full}` : "", s?.name ?? spellId(raw).replace("Summoner", "")]; };
+      const [i1, n1] = spell(p.spell1), [i2, n2] = spell(p.spell2);
+      const ultImg = V && CHAMPS[id] ? `${CDN}/cdn/${V}/img/champion/${CHAMPS[id].image.full}` : "";
+      return `<div class="row"><div class="champ">${V && CHAMPS[id] ? `<img src="${ultImg}" alt="">` : `<div class="ph"></div>`}<span>${name}</span></div>
+        ${sq("r", "", "R")}${sq("s1", i1, n1)}${sq("s2", i2, n2)}</div>`;
+    }).join("");
+    document.querySelectorAll(".sq").forEach((el) => { el.onclick = () => tap(el); el.onkeydown = (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); tap(el); } }; });
+  }
+  // nível define o rank do ult; antes do 6 o quadrado fica travado
+  enemies.forEach((p, i) => { const el = $(`sq-${i}-r`); if (!el) return; const rank = rankOf(p.level); el.classList.toggle("locked", rank < 0); el.querySelector(".lab").textContent = rank < 0 ? "R (nv 6)" : `R ${p.ult ? p.ult[rank] + "s" : ""}`; });
+}
+const rankOf = (lvl) => (lvl >= 16 ? 2 : lvl >= 11 ? 1 : lvl >= 6 ? 0 : -1);
+
+function duration(i, slot) {
+  const p = enemies[i];
+  if (slot === "r") { const r = rankOf(p.level); return r < 0 ? 0 : (p.ult?.[r] ?? 100); }
+  const s = SPELLS[spellId(slot === "s1" ? p.spell1 : p.spell2)];
+  return s ? s.cooldown[0] : 300;
+}
+
+function tap(el) {
+  if (el.classList.contains("locked")) return;
+  const k = el.id;
+  if (timers[k]) { delete timers[k]; el.classList.remove("run"); return; }
+  const secs = duration(+el.dataset.i, el.dataset.slot);
+  if (secs) { timers[k] = Date.now() + secs * 1000; el.classList.remove("ready"); tick(); }
+}
+
+function tick() {
+  const now = Date.now();
+  for (const [k, end] of Object.entries(timers)) {
+    const el = $(k); if (!el) { delete timers[k]; continue; }
+    const left = Math.ceil((end - now) / 1000);
+    if (left <= 0) { delete timers[k]; el.classList.remove("run"); el.classList.add("ready"); setTimeout(() => el.classList.remove("ready"), 4000); continue; }
+    el.classList.add("run");
+    el.querySelector(".cd").textContent = `${Math.floor(left / 60)}:${String(left % 60).padStart(2, "0")}`;
+  }
+}
+setInterval(tick, 250);
+boot();
+</script>
+</body>
+</html>

@@ -18,6 +18,12 @@ Cada sup recebe uma nota pela soma de sete fatores, cada um com peso ajustável 
 
 Lane e Dados são separados de propósito: Soraka tem 52% de winrate de jogo contra Nautilus, mas a lane é muito difícil.
 
+## Timer manual (Mac ou celular)
+
+Com o helporoLOL aberto no PC, abra no Mac ou no celular (mesma rede Wi-Fi) o endereço que aparece no topo do app, tipo `http://192.168.0.10:7777`. Na primeira vez o Windows pergunta se libera o acesso na rede: aceite em **redes privadas**.
+
+A página mostra os inimigos da partida com três quadrados: ult e os dois feitiços. Os campeões e feitiços vêm da API local da partida, mas os timers são manuais: você toca quando vê o feitiço sendo usado. Tempos base, sem runa nem item. Pra testar fora de partida: `http://IP:7777/?demo`.
+
 ## Estrutura
 
 ```
@@ -28,6 +34,8 @@ src/lib/ddragon.ts        ícones e lista de campeões (Data Dragon, CDN oficial
 src/lib/lcu.ts            converte a sessão do cliente em draft e lê o histórico
 src/lib/stats.ts          base da temporada + partidas guardadas por conta
 src-tauri/src/lcu.rs      lê a API local do cliente (porta e senha do processo ou do lockfile)
+src-tauri/src/live.rs     serve a página do timer na rede de casa (porta 7777)
+src-tauri/assets/timer.html  a página do timer
 ```
 
 ## Instalar (Windows)

@@ -6,6 +6,7 @@ import { DEFAULT_POOL, DEFAULT_WEIGHTS, FACTORS, ROLES, blindRisk, candidates, d
 import { PATCH, type SupKey } from "./engine/data";
 import { loadCatalog, norm, offlineCatalog, type Catalog } from "./lib/ddragon";
 import { inTauri, readChampSelect, readHistory, type Account, type LiveState } from "./lib/lcu";
+import { invoke } from "@tauri-apps/api/core";
 import { buildStats, loadGames, mergeGames, overall, saveGames, type Game } from "./lib/stats";
 
 const RN: Record<Role, string> = { top: "Top", jg: "Jungle", mid: "Mid", adc: "ADC", sup: "Sup" };
@@ -41,6 +42,8 @@ export default function App() {
   const [sync, setSync] = useState<{ at: number; added: number } | null>(null);
 
   useEffect(() => { loadCatalog().then(setCat).catch(() => setCatErr(true)); }, []);
+  const [timerUrl, setTimerUrl] = useState("");
+  useEffect(() => { if (inTauri()) invoke<string>("timer_url").then(setTimerUrl).catch(() => {}); }, []);
 
   // Seleção de campeões: lê o cliente a cada 1,5 s
   useEffect(() => {
@@ -113,6 +116,7 @@ export default function App() {
           <p className="hint">{inTauri() ? "Abre a seleção no cliente e o draft preenche sozinho, inclusive sua rota. Pausando o modo seguir, dá pra editar à mão." : "Prévia sem o cliente: preenche o draft e escolhe sua rota."}</p>
         </div>
         <div className="tools">
+          {timerUrl && <span className="pill" title="Abra no Mac ou no celular, na mesma rede Wi-Fi">Timer: {timerUrl}</span>}
           {liveLabel && <span className={`pill ${live?.status === "active" ? "ok" : ""}`}>{liveLabel}</span>}
           {inTauri() && <button className="ghost" onClick={() => setUi({ ...ui, follow: !ui.follow })}>{ui.follow ? "Pausar seguir" : "Seguir cliente"}</button>}
           <button className="ghost" disabled={following} onClick={() => setDraft(EXAMPLE)}>Exemplo</button>
