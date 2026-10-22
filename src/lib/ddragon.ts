@@ -3,6 +3,7 @@
  * https://developer.riotgames.com/docs/lol#data-dragon
  */
 import { CH, fallbackFlags } from "../engine/champions";
+import { ROSTER } from "../engine/roster";
 
 export interface Champ { name: string; id: string; key: number; tags: string[]; flags: string; diff: number; ranged: boolean }
 export interface Catalog { version: string; byName: Map<string, Champ>; byKey: Map<number, Champ>; list: Champ[] }
@@ -22,10 +23,13 @@ export async function loadCatalog(): Promise<Catalog> {
   return { version, list, byName: new Map(list.map((c) => [norm(c.name), c])), byKey: new Map(list.map((c) => [c.key, c])) };
 }
 
-/** Catálogo mínimo, sem ícones, pra quando não houver internet. */
+/** Catálogo embutido (todos os campeões, sem ícones), pra quando o Data Dragon não carregar. */
 export function offlineCatalog(): Catalog {
-  const list: Champ[] = Object.keys(CH).sort().map((name, i) => ({ name, id: name.replace(/[^A-Za-z]/g, ""), key: -1 - i, tags: [], flags: CH[name], diff: 5, ranged: !CH[name].includes("M") }));
-  return { version: "", list, byName: new Map(list.map((c) => [norm(c.name), c])), byKey: new Map() };
+  const list: Champ[] = ROSTER.map((r) => {
+    const flags = CH[r.name] ?? fallbackFlags(r.tags);
+    return { name: r.name, id: r.name.replace(/[^A-Za-z]/g, ""), key: r.key, tags: r.tags, flags, diff: r.diff || 5, ranged: r.range ? r.range > 300 : !flags.includes("M") };
+  }).sort((a, b) => a.name.localeCompare(b.name));
+  return { version: "", list, byName: new Map(list.map((c) => [norm(c.name), c])), byKey: new Map(list.map((c) => [c.key, c])) };
 }
 
 export const iconUrl = (cat: Catalog, c: Champ) => (cat.version && c.key > 0 ? `${CDN}/cdn/${cat.version}/img/champion/${c.id}.png` : "");
