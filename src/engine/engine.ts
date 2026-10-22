@@ -29,6 +29,8 @@ export interface Settings {
   mainAvoid: string[];
   /** alerta: pesa contra a main e soma com o resto do draft, mas sozinho não bloqueia */
   mainWarn: string[];
+  /** reservas em ordem de preferência, testadas com a mesma regra quando a main é evitada */
+  backups: string[];
   /** correções de lane: chave `${sup}|${inimigo}` */
   lane: Record<string, number>;
 }
@@ -260,9 +262,12 @@ export function decide(d: Draft, s: Settings, flags: Flags, stats: Stats, myRole
   if (warned.length) { main.situation! -= 1.2 * warned.length; main.why.push([-1.2 * warned.length, `alerta pra ${main.name}: ${warned.join(", ")}`]); }
   if (blocked.length) main.why.push([-5, `${blocked.join(", ")}: você não joga ${main.name} contra`]);
   const kept = !blocked.length && main.situation! >= -s.mainTolerance;
-  const ordered = kept ? [main, ...results.filter((r) => r !== main)] : results;
+  let ordered = kept ? [main, ...results.filter((r) => r !== main)] : results;
   if (kept) main.why.push([3, results[0] === main ? `${main.name} é sua main e encaixa bem` : `jogável de ${main.name}: sua main fica`]);
   else {
+    // Main fora: a primeira reserva jogável na sua ordem de preferência; se nenhuma for, a maior nota
+    const backup = s.backups.map((n) => results.find((r) => r.name === n && r.status === "ok")).find((r) => r && r.situation! >= -s.mainTolerance);
+    if (backup) { ordered = [backup, ...results.filter((r) => r !== backup)]; backup.why.push([2.5, `${backup.name} é sua próxima opção e é jogável aqui`]); }
     const worst = main.why.filter((w) => w[0] < 0).sort((a, b) => a[0] - b[0]).slice(0, 2).map((w) => w[1]).join("; ");
     ordered[0].why.push([2, `${main.name} evitada: ${worst || "draft ruim pra ela"}`]);
   }

@@ -28,7 +28,7 @@ export default function App() {
   const [cat, setCat] = useState<Catalog>(offlineCatalog);
   const [catErr, setCatErr] = useState(false);
   const [draft, setDraft] = useState<Draft>(EXAMPLE);
-  const [settings, setSettings] = useStored<Settings>("helporo.settings2", { weights: DEFAULT_WEIGHTS, pool: DEFAULT_POOL, focus: ["Nami"], lane: {}, main: "Soraka", mainTolerance: 2, mainAvoid: ["Jarvan IV", "Rengar", "Nocturne"], mainWarn: ["Vi", "Malphite", "Warwick", "Skarner", "Hecarim", "Zac", "Kha'Zix", "Evelynn", "Fiddlesticks", "Kayn", "Qiyana", "Diana"] });
+  const [settings, setSettings] = useStored<Settings>("helporo.settings3", { weights: DEFAULT_WEIGHTS, pool: DEFAULT_POOL, focus: [], lane: {}, backups: ["Sona", "Nami"], main: "Soraka", mainTolerance: 2, mainAvoid: ["Jarvan IV", "Rengar", "Nocturne"], mainWarn: ["Vi", "Malphite", "Warwick", "Skarner", "Hecarim", "Zac", "Kha'Zix", "Evelynn", "Fiddlesticks", "Kayn", "Qiyana", "Diana"] });
   const [ui, setUi] = useStored("helporo.ui", { follow: true, role: "sup" as Role });
   const [live, setLive] = useState<LiveState | null>(null);
   const [banText, setBanText] = useState("");
@@ -213,6 +213,12 @@ export default function App() {
             <div className="sl">
               <label htmlFor="main-in">Champ</label>
               <input id="main-in" className="banin wide" list="champ-list" defaultValue={settings.main} onBlur={(e) => { const c = cat.byName.get(norm(e.target.value)); setSettings((s) => ({ ...s, main: c ? c.name : "" })); }} />
+              <span />
+            </div>
+            <div className="sl">
+              <label htmlFor="backups">Reservas</label>
+              <input id="backups" className="banin wide" defaultValue={settings.backups.join(", ")} placeholder="ex: Sona, Nami"
+                onBlur={(e) => setSettings((s) => ({ ...s, backups: e.target.value.split(",").map((x) => cat.byName.get(norm(x.trim()))?.name).filter(Boolean) as string[] }))} />
               <span />
             </div>
             <div className="sl">
