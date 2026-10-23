@@ -128,7 +128,7 @@ export default function App() {
   const enemies = ROLES.map((r) => draft.enemy[r]).filter(Boolean) as string[];
   const top = results[0]?.status === "ok" ? results[0] : null;
   // opções sinalizadas: um counter do oponente direto e uma sinergia com o parceiro, sempre
-  const special = specialPicks(results, draftForMe, myRole, stats, flags, info, counters, synergies);
+  const special = specialPicks(results, draftForMe, myRole, stats, flags, info, counters, synergies, settings.exclude?.[myRole] ?? []);
   const rolePool = candidates(myRole, settings, stats).filter((n) => settings.pool[myRole].includes(n) || (stats[n]?.byRole[myRole]?.w ?? 0) + (stats[n]?.byRole[myRole]?.l ?? 0) > 0);
 
   const setSlot = (side: "ally" | "enemy", r: Role, v: string | null) => setDraft((d) => ({ ...d, [side]: { ...d[side], [r]: v } }));
@@ -264,7 +264,9 @@ export default function App() {
                   <span className="pn">{n}<small>{statOf(n)}</small></span>
                   <button className={`star ${focus ? "on" : ""}`} aria-pressed={focus} title="Quero treinar (bônus mesmo com histórico ruim)"
                     onClick={() => setSettings((s) => ({ ...s, focus: focus ? s.focus.filter((x) => x !== n) : [...s.focus, n] }))}>★</button>
-                  {manual && <button className="x" title="Tirar do pool" onClick={() => setSettings((s) => ({ ...s, pool: { ...s.pool, [myRole]: s.pool[myRole].filter((x) => x !== n) } }))}>×</button>}
+                  <button className="x" title={manual ? "Tirar do pool" : "Não quero jogar (some das sugestões dessa rota)"} onClick={() => setSettings((s) => manual
+                    ? { ...s, pool: { ...s.pool, [myRole]: s.pool[myRole].filter((x) => x !== n) } }
+                    : { ...s, exclude: { ...s.exclude, [myRole]: [...(s.exclude?.[myRole] ?? []), n] } })}>×</button>
                 </div>
               );
             })}
@@ -273,7 +275,8 @@ export default function App() {
             const c = cat.byName.get(norm(e.target.value));
             if (c) { setSettings((s) => ({ ...s, pool: { ...s.pool, [myRole]: s.pool[myRole].includes(c.name) ? s.pool[myRole] : [...s.pool[myRole], c.name] } })); setPoolText(""); } else setPoolText(e.target.value);
           }} />
-          <p className="note">Entram automaticamente os campeões com jogos seus nessa rota. ★ = quero treinar.</p>
+          <p className="note">Entram automaticamente os campeões com jogos seus nessa rota. ★ = quero treinar. × = não quero jogar.
+            {(settings.exclude?.[myRole]?.length ?? 0) > 0 && <> Ocultos: {settings.exclude![myRole]!.join(", ")}. <button className="link" onClick={() => setSettings((s) => ({ ...s, exclude: { ...s.exclude, [myRole]: [] } }))}>mostrar de novo</button></>}</p>
         </div>
         <div className="sect">
           <h2>Seu histórico</h2>

@@ -34,6 +34,8 @@ export interface Settings {
   backups: string[];
   /** sup (e de preferência ADC) inimigo tem que estar revelado pra sugerir a main */
   mainNoBlind: boolean;
+  /** campeões que você não quer que apareçam (por rota) */
+  exclude?: Partial<Record<Role, string[]>>;
   /** correções de lane: chave `${sup}|${inimigo}` */
   lane: Record<string, number>;
 }
@@ -168,7 +170,8 @@ export function candidates(role: Role, s: Settings, stats: Stats): string[] {
     return g >= 4 && g / Math.max(total, 1) >= 0.04;
   }).map(([n]) => n);
   const explore = roleGames(stats, role) < 40 ? [...ROLE_LIST[role]] : [];
-  return [...new Set([...s.pool[role], ...fromStats, ...explore])];
+  const hidden = new Set(s.exclude?.[role] ?? []);
+  return [...new Set([...s.pool[role], ...fromStats, ...explore])].filter((n) => !hidden.has(n));
 }
 
 /** O quanto um campeão se parece com os que você joga (características, tags oficiais e alcance). */
@@ -344,10 +347,11 @@ export interface Special { name: string; wr: number; n: number; tag: string; inP
  * Prefere campeão do seu pool (e diz se é main seu); se nenhum serve, mostra o melhor de fora.
  */
 export function specialPicks(results: Result[], d: Draft, myRole: Role, stats: Stats, flags: Flags, info: Info,
-  counters: Counters | null, synergies: Counters | null): { counter: Special | null; synergy: Special | null; opp: string | null; partner: string | null } {
-  const taken = new Set([...ROLES.map((r) => d.ally[r]), ...ROLES.map((r) => d.enemy[r]), ...d.bans].filter(Boolean) as string[]);
-  const pool = new Set(results.filter((r) => r.status === "ok").map((r) => r.name));
+  counters: Counters | null, synergies: Counters | null, hidden: string[] = []): { counter: Special | null; synergy: Special | null; opp: string | null; partner: string | null } {
+  const taken = new Set([...ROLES.map((r) => d.ally[r]), ...ROLES.map((r) => d.enemy[r]), ...d.bans, ...hidden].filter(Boolean) as string[]);
   const roleGames = (n: string) => { const c = stats[n]?.byRole[myRole]; return c ? c.w + c.l : 0; };
+  // "seu pool" = campeões que você joga nessa rota (os sugeridos só por exploração não contam)
+  const pool = new Set(results.filter((r) => r.status === "ok" && roleGames(r.name) >= 3).map((r) => r.name));
   const tagFor = (n: string, kind: string) => {
     const g = roleGames(n);
     if (g >= 20) return `${kind} · main seu (${g} jogos)`;

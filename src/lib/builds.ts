@@ -3,7 +3,7 @@
  * baixados da branch "data". Nomes e ícones de runas e itens vêm do Data Dragon.
  */
 import type { Counters } from "../engine/engine";
-import { SNAPSHOT, shardId } from "../engine/snapshot";
+import { SNAPSHOT, SNAP_COUNTERS, shardId } from "../engine/snapshot";
 
 const RAW = "https://raw.githubusercontent.com/ticiive/helporoLOL/data/model/out";
 const CDN = "https://ddragon.leagueoflegends.com";
@@ -31,7 +31,13 @@ async function getJson<T>(name: string): Promise<T | null> {
   try { return JSON.parse(localStorage.getItem(key) || "null"); } catch { return null; }
 }
 export const loadBuilds = () => getJson<Builds>("builds.json");
-export const loadCounters = () => getJson<Counters>("counters.json");
+/** Counters Mestre+ próprios; onde ainda não há dado, completa com o snapshot do op.gg. */
+export const loadCounters = async () => {
+  const own = (await getJson<Counters>("counters.json")) ?? {};
+  const out: Counters = JSON.parse(JSON.stringify(SNAP_COUNTERS));
+  for (const [role, m] of Object.entries(own)) { out[role] = out[role] ?? {}; for (const [opp, rows] of Object.entries(m)) if (rows.length >= 3) out[role][opp] = rows; }
+  return out;
+};
 export const loadSynergies = () => getJson<Counters>("synergies.json");
 
 /** Nomes e ícones de runas, itens e feitiços (Data Dragon, em português). */
