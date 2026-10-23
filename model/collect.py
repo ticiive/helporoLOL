@@ -23,6 +23,7 @@ class Riot:
     def __init__(self, key: str):
         self.key = key
         self.window = []  # horários das últimas requisições (janela de 2 min)
+        self.dead = False  # vira True quando a chave vence
 
     def _wait(self):
         now = time.time()
@@ -36,6 +37,8 @@ class Riot:
     def get(self, url: str, params: dict | None = None):
         if params:
             url += "?" + urllib.parse.urlencode(params)
+        if self.dead:
+            return None
         for attempt in range(6):
             self._wait()
             req = urllib.request.Request(url, headers={"X-Riot-Token": self.key, "User-Agent": "helporoLOL-model"})
@@ -50,7 +53,11 @@ class Riot:
                     time.sleep(2 * (attempt + 1))
                     continue
                 if e.code in (401, 403):
-                    sys.exit("Chave da Riot inválida ou expirada (a de desenvolvimento dura 24h). Gere outra e atualize o segredo RIOT_API_KEY.")
+                    # chave venceu: para a coleta, mas salva o que juntou e deixa o treino rodar
+                    if not self.dead:
+                        print("Chave da Riot inválida ou expirada (a dev dura 24h). Parando a coleta; o treino roda com o que já tem.", flush=True)
+                    self.dead = True
+                    return None
                 if e.code == 404:
                     return None
                 raise
@@ -179,7 +186,7 @@ def main():
     order = sorted(players, key=lambda p: (p not in mains, state["visited"].get(p, 0)))
     for i, puuid in enumerate(order):
         is_main = puuid in mains
-        if time.time() > deadline - 600 or (len(queue) > 20000 and not is_main):
+        if riot.dead or time.time() > deadline - 600 or (len(queue) > 20000 and not is_main):
             break
         ids = riot.get(f"{REGION}/lol/match/v5/matches/by-puuid/{puuid}/ids",
                        {"queue": QUEUE, "type": "ranked", "start": 0, "count": args.ids_per_player, "startTime": SEASON_START}) or []
@@ -200,7 +207,7 @@ def main():
     with gzip.open(mf, "at") as out:
         # partidas dos mains primeiro; dentro de cada grupo, as mais recentes
         for mid in sorted(queue, key=lambda x: (x not in prio, -int(x.rsplit("_", 1)[-1]) if x.rsplit("_", 1)[-1].isdigit() else 0)):
-            if time.time() > deadline:
+            if riot.dead or time.time() > deadline:
                 break
             m = riot.get(f"{REGION}/lol/match/v5/matches/{mid}")
             queue.discard(mid); prio.discard(mid)
