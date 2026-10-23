@@ -39,10 +39,10 @@ export function BuildPanel({ champ, role, build, names, enemies, flags }: Props)
     <div className="build">
       <div className="bhead">
         <span className="lbl">Runas e build de {champ} ({role})</span>
-        <span className="note">{build.jogos.toLocaleString("pt-BR")} jogos Mestre+ · {build.wr}%</span>
+        <span className="note">{build.fonte === "opgg" ? `op.gg, Esmeralda+ (provisório) · ${build.wr}%` : `${build.jogos.toLocaleString("pt-BR")} jogos Mestre+ · ${build.wr}%`}</span>
       </div>
       <div className="runes">
-        {[r.primaria, ...r.perks.slice(0, 4)].map((id, i) => rn(id) && (
+        {[r.primaria, ...r.perks.slice(0, 4)].map((id, i) => id > 0 && rn(id) && (
           <img key={`p${i}`} className={i === 1 ? "key" : ""} src={runeIcon(rn(id)!.icon)} title={rn(id)!.name} alt={rn(id)!.name} />
         ))}
         <span className="sep" />
@@ -62,8 +62,12 @@ export function BuildPanel({ champ, role, build, names, enemies, flags }: Props)
         {build.core.map((id) => <Item key={id} id={id} names={names} />)}
         {build.botas && <Item id={build.botas} names={names} />}
       </div>
-      <div className="lbl">Situacionais pra esse draft</div>
-      {situ.length ? (
+      {build.extras && build.extras.length > 0 && (<>
+        <div className="lbl">Outros itens comuns</div>
+        <div className="brow">{build.extras.map((id) => <Item key={id} id={id} names={names} />)}</div>
+      </>)}
+      {build.fonte !== "opgg" && <div className="lbl">Situacionais pra esse draft</div>}
+      {build.fonte === "opgg" ? null : situ.length ? (
         <div className="situ">{situ.map((s) => <div key={s.item + s.cond}><Item id={s.item} names={names} /><span className="note">{s.quando}: {s.wr}% com o item ({s.ganho > 0 ? "+" : ""}{s.ganho} pts, {s.jogos} jogos)</span></div>)}</div>
       ) : <p className="note">Nada fora do comum nesse draft: vai na build principal.</p>}
       {other.length > 0 && (

@@ -9,7 +9,7 @@ import { inTauri, readChampSelect, readHistory, type Account, type LiveState } f
 import { invoke } from "@tauri-apps/api/core";
 import { confidence, loadModel, predict, type TrainedModel } from "./engine/model";
 import { checkUpdate, installUpdate, type Pending } from "./lib/updater";
-import { loadBuilds, loadCounters, loadNames, loadSynergies, type Builds, type Names } from "./lib/builds";
+import { loadBuilds, loadCounters, loadNames, loadSynergies, snapshotBuild, type Builds, type Names } from "./lib/builds";
 import { BuildPanel } from "./components/BuildPanel";
 import { specialPicks, type Counters } from "./engine/engine";
 import { buildStats, loadGames, mergeGames, overall, saveGames, type Game } from "./lib/stats";
@@ -221,7 +221,7 @@ export default function App() {
               </div>
             ))}
           </div>
-          {top && <BuildPanel champ={top.name} role={myRole} build={builds?.[myRole]?.[top.name]} names={names} enemies={ROLES.map((r) => draft.enemy[r]).filter(Boolean) as string[]} flags={(n) => flags(n)} />}
+          {top && <BuildPanel champ={top.name} role={myRole} build={builds?.[myRole]?.[top.name] ?? snapshotBuild(top.name, myRole, names)} names={names} enemies={ROLES.map((r) => draft.enemy[r]).filter(Boolean) as string[]} flags={(n) => flags(n)} />}
         </div>
 
         <div className="team enemy">

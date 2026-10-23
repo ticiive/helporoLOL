@@ -1,5 +1,6 @@
 import { LANE, META, MU, SUPS, SUP_KEYS, SYN_ADC, type SupKey } from "./data";
 import type { Stats } from "../lib/stats";
+import { YUUMI_SYN } from "./snapshot";
 import { BOTS, JUNGLERS, MIDS, SUPPORTS, TOPS } from "./champions";
 
 export const ROLES = ["top", "jg", "mid", "adc", "sup"] as const;
@@ -373,6 +374,9 @@ export function specialPicks(results: Result[], d: Draft, myRole: Role, stats: S
       const rows = SUP_KEYS.filter((k) => SYN_ADC[k][partner] && SYN_ADC[k][partner].wr - META[k].wr >= 1)
         .sort((a, b) => (SYN_ADC[b][partner].wr - META[b].wr) - (SYN_ADC[a][partner].wr - META[a].wr))
         .map((k) => [SUPS[k], SYN_ADC[k][partner].wr, SYN_ADC[k][partner].n] as [string, number, number]);
+      // Yuumi (snapshot op.gg): dupla acima da média dela (~48,5%)
+      const yu = Object.fromEntries(YUUMI_SYN.split(",").map((x) => { const [n, w, g] = x.split(":"); return [n, [+w, +g]]; })) as Record<string, [number, number]>;
+      if (yu[partner] && yu[partner][0] - 48.5 >= 1.5) rows.push(["Yuumi", yu[partner][0], yu[partner][1]]);
       synergy = pick(rows, "sinergia perfeita", 0);
     }
   }
