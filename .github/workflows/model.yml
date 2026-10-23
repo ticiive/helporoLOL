@@ -1,16 +1,17 @@
 name: Coletar partidas e treinar o modelo
 
-# Roda todo dia às 4h (Brasília) e pode ser disparado à mão na aba Actions.
+# Roda 4 vezes por dia (22h, 4h, 10h e 16h de Brasília) pra usar a chave o dia todo;
+# pode ser disparado à mão na aba Actions. Uma rodada espera a outra terminar.
 # Precisa do segredo RIOT_API_KEY (Settings -> Secrets and variables -> Actions).
 # Os dados e o modelo ficam na branch "data", que é refeita a cada rodada.
 on:
   schedule:
-    - cron: "0 7 * * *"
+    - cron: "0 1,7,13,19 * * *"
   workflow_dispatch:
     inputs:
       horas:
         description: "Horas de coleta nesta rodada"
-        default: "4.5"
+        default: "5"
 
 permissions:
   contents: write
@@ -42,7 +43,7 @@ jobs:
       - name: Coleta partidas (Mestre+ e Diamante 1, BR)
         env:
           RIOT_API_KEY: ${{ secrets.RIOT_API_KEY }}
-        run: python model/collect.py --d1 --hours "${{ github.event.inputs.horas || '4.5' }}"
+        run: python model/collect.py --d1 --hours "${{ github.event.inputs.horas || '5' }}"
 
       - name: Treina
         working-directory: model

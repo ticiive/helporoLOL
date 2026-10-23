@@ -35,10 +35,18 @@ export const loadBuilds = () => getJson<Builds>("builds.json");
 export const loadCounters = async () => {
   const own = (await getJson<Counters>("counters.json")) ?? {};
   const out: Counters = JSON.parse(JSON.stringify(SNAP_COUNTERS));
-  for (const [role, m] of Object.entries(own)) { out[role] = out[role] ?? {}; for (const [opp, rows] of Object.entries(m)) if (rows.length >= 3) out[role][opp] = rows; }
+  // dado próprio só substitui o op.gg quando tem amostra de verdade (3+ campeões com 100+ jogos)
+  for (const [role, m] of Object.entries(own)) { out[role] = out[role] ?? {}; for (const [opp, rows] of Object.entries(m)) { const ok = rows.filter((r) => r[2] >= MIN_N); if (ok.length >= 3) out[role][opp] = ok; } }
   return out;
 };
-export const loadSynergies = () => getJson<Counters>("synergies.json");
+const MIN_N = 100;
+export const loadSynergies = async () => {
+  const own = await getJson<Counters>("synergies.json");
+  if (!own) return null;
+  const out: Counters = {};
+  for (const [role, m] of Object.entries(own)) { out[role] = {}; for (const [p, rows] of Object.entries(m)) { const ok = rows.filter((r) => r[2] >= MIN_N); if (ok.length) out[role][p] = ok; } }
+  return out;
+};
 
 /** Nomes e ícones de runas, itens e feitiços (Data Dragon, em português). */
 export interface Names {

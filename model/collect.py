@@ -127,6 +127,22 @@ def compact(m: dict) -> dict | None:
     }
 
 
+MODEL_SUPS = {"Soraka", "Sona", "Nami", "Janna", "Lulu", "Milio"}
+
+
+def sup_mains(mf: Path, min_games: int = 5) -> set:
+    """puuids com pelo menos min_games jogos de sup com um dos sups do modelo nas partidas já baixadas."""
+    cnt = {}
+    if mf.exists():
+        with gzip.open(mf, "rt") as f:
+            for line in f:
+                for t in json.loads(line)["teams"]:
+                    for p in t["picks"]:
+                        if p["r"] == "UTILITY" and p["c"] in MODEL_SUPS:
+                            cnt[p["p"]] = cnt.get(p["p"], 0) + 1
+    return {p for p, n in cnt.items() if n >= min_games}
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--hours", type=float, default=5.0, help="tempo máximo desta rodada")
@@ -155,16 +171,25 @@ def main():
             for line in f:
                 seen.add(json.loads(line)["id"])
     queue -= seen
-    order = sorted(players, key=lambda p: state["visited"].get(p, 0))  # quem foi visitado há mais tempo primeiro
+    # jogadores que mais jogam os sups do modelo vêm primeiro, e as partidas deles também:
+    # é o que mais aumenta a amostra de Soraka, Sona, Nami...
+    mains = sup_mains(mf)
+    prio = set(state.get("prio", [])) - seen
+    print(f"mains dos sups do modelo: {len(mains)}", flush=True)
+    order = sorted(players, key=lambda p: (p not in mains, state["visited"].get(p, 0)))
     for i, puuid in enumerate(order):
-        if time.time() > deadline - 600 or len(queue) > 20000:
+        is_main = puuid in mains
+        if time.time() > deadline - 600 or (len(queue) > 20000 and not is_main):
             break
         ids = riot.get(f"{REGION}/lol/match/v5/matches/by-puuid/{puuid}/ids",
                        {"queue": QUEUE, "type": "ranked", "start": 0, "count": args.ids_per_player, "startTime": SEASON_START}) or []
-        queue.update(x for x in ids if x not in seen)
+        new_ids = [x for x in ids if x not in seen]
+        queue.update(new_ids)
+        if is_main:
+            prio.update(new_ids)
         state["visited"][puuid] = int(time.time())
         if i % 50 == 0:
-            state["queue"] = sorted(queue)
+            state["queue"] = sorted(queue); state["prio"] = sorted(prio & queue)
             save_json(DATA / "state.json", state)
             print(f"jogadores visitados {i}/{len(order)} · partidas na fila {len(queue)}", flush=True)
     state["queue"] = sorted(queue)
@@ -173,11 +198,12 @@ def main():
     # 3) baixa as partidas da fila até acabar o tempo
     got = 0
     with gzip.open(mf, "at") as out:
-        for mid in sorted(queue, reverse=True):  # mais recentes primeiro
+        # partidas dos mains primeiro; dentro de cada grupo, as mais recentes
+        for mid in sorted(queue, key=lambda x: (x not in prio, -int(x.rsplit("_", 1)[-1]) if x.rsplit("_", 1)[-1].isdigit() else 0)):
             if time.time() > deadline:
                 break
             m = riot.get(f"{REGION}/lol/match/v5/matches/{mid}")
-            queue.discard(mid)
+            queue.discard(mid); prio.discard(mid)
             row = compact(m) if m else None
             if row:
                 out.write(json.dumps(row) + "\n")
@@ -187,7 +213,7 @@ def main():
                 state["queue"] = sorted(queue)
                 save_json(DATA / "state.json", state)
                 print(f"partidas novas: {got} · na fila: {len(queue)}", flush=True)
-    state["queue"] = sorted(queue)
+    state["queue"] = sorted(queue); state["prio"] = sorted(prio & queue)
     save_json(DATA / "state.json", state)
     print(f"fim da rodada: {got} partidas novas, {len(seen) + got} no total, {len(queue)} na fila", flush=True)
 

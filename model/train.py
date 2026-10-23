@@ -239,10 +239,15 @@ def main(epochs=800):
     model.fit(Xtr, ytr, wtr, epochs=epochs)
 
     pva = model.predict(Xva)
+    # No draft o app não sabe o elo dos times: a qualidade que importa é a do modelo sem a diferença de elo.
+    # É ela que decide quanto o app confia no modelo (confidence() lê logloss_modelo e auc_modelo).
+    Xn = dict(Xva); Xn["eloDiff"] = np.zeros_like(Xva["eloDiff"])
+    pdr = model.predict(Xn)
     base = np.array([ytr[Xtr["s"] == s].mean() if (Xtr["s"] == s).any() else 0.5 for s in Xva["s"]])
     metrics = {"amostras_treino": int(cut), "amostras_validacao": int(len(rows) - cut),
-               "logloss_modelo": logloss(yva, pva), "logloss_so_media_do_sup": logloss(yva, base),
-               "auc_modelo": auc(yva, pva)}
+               "logloss_modelo": logloss(yva, pdr), "logloss_so_media_do_sup": logloss(yva, base),
+               "auc_modelo": auc(yva, pdr),
+               "logloss_com_elo": logloss(yva, pva), "auc_com_elo": auc(yva, pva)}
     print(json.dumps(metrics, indent=1))
 
     p = {k: v.tolist() for k, v in model.p.items()}
@@ -259,7 +264,9 @@ def report(model, champs, counts, metrics, M, lane_set, adc_set):
     lines = ["# Relatório do modelo", "", f"Amostras por sup: {dict(counts)}", "",
              "## Qualidade (jogos mais recentes, que o modelo não viu)", "",
              f"- Perda do modelo: {metrics['logloss_modelo']:.4f} (só a média do sup: {metrics['logloss_so_media_do_sup']:.4f}; menor é melhor)",
-             f"- AUC: {metrics['auc_modelo']:.3f} (0,5 = chute; num jogo com tanto acaso, 0,55 a 0,60 já é bom)", ""]
+             f"- AUC: {metrics['auc_modelo']:.3f} (0,5 = chute; num jogo com tanto acaso, 0,55 a 0,60 já é bom)",
+             f"- Só o draft (sem a diferença de elo, que o app não sabe na seleção) é o que vale acima. Com o elo: AUC {metrics.get('auc_com_elo', 0):.3f}.",
+             f"- O app só usa o modelo quando o draft sozinho bate a média do sup.", ""]
     # efeito de cada inimigo na dupla do bot, por sup, em pontos de winrate
     lines += ["## Inimigos do bot que mais mudam o jogo de cada sup", "",
               "Efeito em pontos de winrate quando o campeão é o sup ou o ADC inimigo, em relação à média.", ""]
