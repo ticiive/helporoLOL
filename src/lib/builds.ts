@@ -2,7 +2,7 @@
  * Runas, builds e counters calculados das partidas Mestre+ (model/builds.py),
  * baixados da branch "data". Nomes e ícones de runas e itens vêm do Data Dragon.
  */
-import type { Counters } from "../engine/engine";
+import { ccThreat, type Counters } from "../engine/engine";
 import { SNAPSHOT, SNAP_COUNTERS, shardId } from "../engine/snapshot";
 
 const RAW = "https://raw.githubusercontent.com/ticiive/helporoLOL/data/model/out";
@@ -93,7 +93,7 @@ export function activeConditions(enemies: string[], flags: (n: string) => string
   if (enemies.filter((n) => HEALERS.has(n)).length >= 2) c.add("cura");
   if (f.filter((x) => /[XD]/.test(x)).length >= 2) c.add("assassinos");
   if (f.filter((x) => x.includes("F")).length >= 2) c.add("tanques");
-  if (f.filter((x) => /[CE]/.test(x)).length >= 3) c.add("cc");
+  if (ccThreat(enemies, (n) => (n ? flags(n) : "")).level === 2) c.add("cc");
   return c;
 }
 

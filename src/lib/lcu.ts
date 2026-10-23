@@ -34,17 +34,23 @@ export function assignRoles(players: { name: string | null; ban?: string | null 
   const ps = players.filter((p) => p.name || p.ban).slice(0, 5);
   const score = (p: { name: string | null; ban?: string | null }, r: Role) =>
     (rolesOf(p.name).includes(r) ? 2 : 0) + (rolesOf(p.ban ?? null).includes(r) ? 1 : 0);
-  let best: Role[] = [], bestScore = -1;
+  let ties: Role[][] = [], bestScore = -1;
   const perm = (left: Role[], acc: Role[]) => {
     if (acc.length === ps.length) {
       const sc = acc.reduce((a, r, i) => a + score(ps[i], r), 0);
-      if (sc > bestScore) { bestScore = sc; best = acc; }
+      if (sc > bestScore) { bestScore = sc; ties = [acc]; } else if (sc === bestScore) ties.push(acc);
       return;
     }
     left.forEach((r, i) => perm([...left.slice(0, i), ...left.slice(i + 1)], [...acc, r]));
   };
   perm([...ROLES], []);
+  // Empate em quem é o sup (ex.: Lux e Senna sem o mid aparecer): não chuta, deixa o sup em aberto
+  // pra regra de blind valer, e põe os campeões nas outras rotas.
+  const supOf = (a: Role[]) => ps[a.indexOf("sup")]?.name ?? null;
+  const supSure = ties.every((a) => supOf(a) === supOf(ties[0]));
+  const best = supSure ? ties[0] : ties.find((a) => !supOf(a)) ?? ties[0];
   ps.forEach((p, i) => { if (p.name) t[best[i]] = p.name; });
+  if (!supSure) t.sup = null;
   return t;
 }
 

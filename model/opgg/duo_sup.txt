@@ -1,0 +1,15 @@
+Soraka=Kai'Sa:48.04:993,Jinx:49.55:989,Jhin:52.30:977,Ezreal:49.23:776,Caitlyn:50.49:721,Aphelios:45.86:580,Yunara:47.27:531,Tristana:55.96:495,Miss Fortune:48.91:458,Smolder:50.72:418
+Sona=Ezreal:49.68:6576,Kai'Sa:49.66:5977,Caitlyn:49.9:4908,Jhin:50.08:4780,Seraphine:53.93:3881,Jinx:51.42:3798,Miss Fortune:50.46:2931,Lucian:52.06:2789,Smolder:52.67:2601,Sivir:51.71:2398
+Nami=Lucian:49.14:22521,Jinx:52.65:11183,Caitlyn:49.55:9710,Jhin:50.77:9576,Kai'Sa:51.41:9529,Yunara:49.26:8395,Tristana:53.55:7729,Ezreal:49.33:6823,Twitch:52.17:4269,Smolder:51.36:3614
+Morgana=Caitlyn:48.79:2023,Jhin:50.22:1352,Kai'Sa:48.51:1008,Jinx:50.00:794,Miss Fortune:49.79:727,Ezreal:46.84:585,Tristana:47.66:428,Aphelios:49.04:416,Yunara:49.33:371,Xayah:51.59:347
+Lux=Caitlyn:49.39:4280,Jhin:48.82:2372,Ezreal:49.91:1699,Kai'Sa:51.50:1297,Jinx:48.78:939,Miss Fortune:51.58:919,Tristana:47.77:584,Smolder:41.90:432,Ashe:43.80:411,Aphelios:46.55:406
+Karma=Ezreal:45.28:13917,Jhin:50.30:9725,Caitlyn:49.42:7960,Jinx:51.02:5788,Kai'Sa:48.89:4807,Yunara:47.98:4216,Tristana:48.60:2827,Sivir:50.12:2137,Ashe:49.34:1976,Lucian:46.53:1728
+Janna=Jhin:53.05:1297,Kai'Sa:52.44:1047,Jinx:53.29:1032,Caitlyn:49.64:834,Ezreal:47.48:813,Yunara:52.50:619,Miss Fortune:51.41:605,Aphelios:47.89:522,Tristana:50.39:514,Draven:53.49:501
+Lulu=Jinx:52.19:13055,Yunara:51.14:10934,Kai'Sa:47.79:7014,Twitch:52.57:6487,Zeri:52.34:4232,Vayne:52.66:4195,Aphelios:48.89:4134,Kog'Maw:52.8:3977,Tristana:53.99:3764,Caitlyn:48.65:3011
+Milio=Lucian:48.43:3640,Jinx:53.00:2070,Caitlyn:49.96:1145,Yunara:49.70:990,Aphelios:50.51:875,Kai'Sa:46.42:866,Twitch:52.70:647,Jhin:49.91:567,Tristana:51.03:535,Ashe:53.40:530
+Seraphine=Ashe:53.15:12601,Jhin:49.71:5977,Jinx:51.30:4680,Kai'Sa:51.56:4515,Caitlyn:48.78:4514,Ezreal:47.36:4478,Yunara:50.32:3148,Miss Fortune:47.59:2925,Tristana:52.01:2440,Sivir:47.90:1449
+Zyra=Jhin:51.53:7756,Caitlyn:49.08:3843,Kai'Sa:49.31:3024,Ezreal:46.73:2754,Jinx:49.79:2669,Tristana:52.25:1734,Miss Fortune:46.92:1658,Ashe:45.72:1308,Yunara:47.71:1289,Aphelios:47.49:1253
+Braum=Lucian:51.31:1949,Jinx:54.82:1638,Kai'Sa:52.74:1585,Yunara:57.63:1154,Ashe:48.92:973,Caitlyn:47.70:893,Aphelios:55.62:863,Tristana:53.66:846,Ezreal:50.45:773,Miss Fortune:51.89:636
+Yuumi=Zeri:50.20:3279,Twitch:50.54:1286,Tristana:50.45:1209,Lucian:51.15:1175,Ezreal:37.71:952,Kai'Sa:43.57:762,Sivir:48.07:753,Yunara:49.59:615,Jinx:43.63:573
+Thresh=Jinx:54.67:33730,Kai'Sa:51.29:28730,Aphelios:52.91:22510,Caitlyn:51.18:19488,Jhin:49.72:19385,Tristana:52.52:14507,Yunara:51.43:11164,Ezreal:46.03:9588,Draven:52.78:8814,Lucian:51.10:8624
+Xerath=Jhin:49.01:2726,Ezreal:48.54:789,Caitlyn:48.10:686,Kai'Sa:48.75:521,Miss Fortune:43.60:367,Jinx:46.89:354,Varus:50.45:224,Tristana:47.73:220,Aphelios:51.02:196,Ashe:46.60:191

@@ -158,3 +158,12 @@ details summary { cursor: pointer; }
 .special .lbl .note { text-transform: none; letter-spacing: 0; font-family: var(--body); margin-left: 4px; }
 .special .alt { grid-template-columns: 30px minmax(0, 1fr) auto auto; }
 .special .alt b small { display: block; }
+
+.banner.crit { border-color: #e5484d; background: rgba(229,72,77,.12); color: var(--fg); }
+.banner.crit b { color: #ff6b70; }
+.alt .chips { grid-column: 2 / -1; display: flex; flex-wrap: wrap; gap: 4px; margin-top: -2px; }
+.chip { font-size: 11.5px; padding: 1px 7px; border-radius: 10px; border: 1px solid var(--line); color: var(--muted); }
+.chip.good { border-color: var(--good); color: var(--good); }
+.chip.bad { border-color: var(--bad); color: var(--bad); }
+.specials.bot { grid-template-columns: 1fr; }
+.specials.bot .alt b small { display: inline; margin-left: 4px; }

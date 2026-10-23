@@ -1,8 +1,9 @@
+import { bestVs, bestWith } from "./engine/botlane";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ChampInput, Icon } from "./components/ChampInput";
 import { ResultPanel } from "./components/ResultPanel";
 import { ProfileCard } from "./components/ProfileCard";
-import { DEFAULT_POOL, DEFAULT_WEIGHTS, FACTORS, ROLES, blindRisk, candidates, decide, laneKey, profile, type Draft, type Role, type Settings, type Team } from "./engine/engine";
+import { DEFAULT_POOL, DEFAULT_WEIGHTS, FACTORS, ROLES, blindRisk, ccThreat, candidates, decide, laneKey, profile, type Draft, type Role, type Settings, type Team } from "./engine/engine";
 import { PATCH, type SupKey } from "./engine/data";
 import { loadCatalog, norm, offlineCatalog, type Catalog } from "./lib/ddragon";
 import { inTauri, readChampSelect, readHistory, type Account, type LiveState } from "./lib/lcu";
@@ -17,8 +18,8 @@ import { buildStats, loadGames, mergeGames, overall, saveGames, type Game } from
 const RN: Record<Role, string> = { top: "Top", jg: "Jungle", mid: "Mid", adc: "ADC", sup: "Sup" };
 const empty = (): Team => ({ top: null, jg: null, mid: null, adc: null, sup: null });
 const EXAMPLE: Draft = {
-  ally: { top: "Ornn", jg: "Sejuani", mid: "Orianna", adc: "Jinx", sup: null },
-  enemy: { top: "Camille", jg: "Nocturne", mid: "Zed", adc: "Draven", sup: "Nautilus" },
+  ally: { top: "Ornn", jg: "Sejuani", mid: "Orianna", adc: "Caitlyn", sup: null },
+  enemy: { top: "Camille", jg: "Amumu", mid: "Zed", adc: "Lux", sup: "Senna" },
   bans: ["Lulu"],
 };
 const OWNER_ACC = "ticiive#lett";
@@ -149,6 +150,9 @@ export default function App() {
   const allies = ROLES.filter((r) => r !== myRole).map((r) => draftForMe.ally[r]).filter(Boolean) as string[];
   const enemies = ROLES.map((r) => draft.enemy[r]).filter(Boolean) as string[];
   const top = results[0]?.status === "ok" ? results[0] : null;
+  const cc = ccThreat(enemies, flags);
+  const skipBot = new Set([...ROLES.map((r) => draft.ally[r]), ...ROLES.map((r) => draft.enemy[r]), ...draft.bans, ...(settings.exclude?.sup ?? [])].filter(Boolean) as string[]);
+  const poolTag = (n: string) => { const c = stats[n]?.byRole.sup; const g = c ? c.w + c.l : 0; return g >= 20 ? `main seu (${g} jogos)` : g >= 3 || settings.pool.sup.includes(n) ? "no seu pool" : "fora do seu pool"; };
   // opções sinalizadas: um counter do oponente direto e uma sinergia com o parceiro, sempre
   const special = specialPicks(results, draftForMe, myRole, stats, flags, info, counters, synergies, settings.exclude?.[myRole] ?? []);
   const rolePool = candidates(myRole, settings, stats).filter((n) => settings.pool[myRole].includes(n) || (stats[n]?.byRole[myRole]?.w ?? 0) + (stats[n]?.byRole[myRole]?.l ?? 0) > 0);
@@ -201,6 +205,12 @@ export default function App() {
           <b>Você está em partida.</b> O draft da seleção fica aqui. Pro timer de feitiços, abra no Mac ou no celular: <code>{timerUrl || "http://IP-do-PC:7777"}</code>
         </div>
       )}
+      {cc.level === 2 && (
+        <div className="banner crit">
+          <b>CC crítico: {cc.who.join(", ")}.</b> Tomar um é morte, porque o resto encadeia.
+          {myRole === "sup" ? " Precisa de resposta a CC: Morgana (escudo bloqueia o CC), Milio (ult tira o CC), Braum (bloqueia projétil). Item: Bênção de Mikael." : " Jogue de trás da sua frontline e considere Botas de Mercúrio ou Faixa/QSS."}
+        </div>
+      )}
       <div className="roles" role="group" aria-label="Sua rota">
         <span className="lbl">Sua rota</span>
         {ROLES.map((r) => (
@@ -226,7 +236,26 @@ export default function App() {
             <span className={`pill ${risk >= 0.45 ? "warn" : "ok"}`}>{risk >= 0.45 ? "Blind: oponente direto escondido" : "Oponente direto revelado"}</span>
             <span className="pill">Risco de counter {Math.round(risk * 100)}%</span>
           </div>
-          <ResultPanel results={results} risk={risk} enemySup={myRole === "sup" ? draft.enemy.sup : null} settings={settings} cat={cat} onLane={setLane} />
+          <ResultPanel results={results} risk={risk} enemySup={myRole === "sup" ? draft.enemy.sup : null} myAdc={myRole === "sup" ? draft.ally.adc : null} settings={settings} cat={cat} onLane={setLane} />
+          {myRole === "sup" ? (
+          <div className="specials bot">
+            {([["counter", draft.enemy.sup, `Contra ${draft.enemy.sup ?? "o sup inimigo"}`, draft.enemy.sup ? bestVs(draft.enemy.sup, skipBot, 4).map((x) => ({ name: x.name, txt: `${x.wr.toFixed(1)}% · ${x.n.toLocaleString("pt-BR")}j` })) : []],
+               ["synergy", draft.ally.adc, `Com ${draft.ally.adc ?? "o seu ADC"}`, draft.ally.adc ? bestWith(draft.ally.adc, skipBot, 4).map((x) => ({ name: x.name, txt: `${x.wr.toFixed(1)}% (${x.delta >= 0 ? "+" : ""}${x.delta.toFixed(1)}) · ${x.n.toLocaleString("pt-BR")}j` })) : []]] as const).map(([k, who, title, rows]) => (
+              <div key={k} className={`special ${k}`}>
+                <div className="lbl">{k === "counter" ? "Bom contra" : "Bom com"} <span className="note">{title} · op.gg Esmeralda+</span></div>
+                {!who ? <p className="note">{k === "counter" ? "Aparece quando o sup inimigo for revelado." : "Aparece quando o seu ADC pickar."}</p>
+                  : rows.length ? rows.map((x) => (
+                    <div key={x.name} className="alt">
+                      <Icon cat={cat} champ={cat.byName.get(norm(x.name)) ?? null} size={26} />
+                      <b>{x.name}<small> {poolTag(x.name)}</small></b>
+                      <span />
+                      <span className="sc">{x.txt}</span>
+                    </div>
+                  )) : <p className="note">Sem dados dessa dupla ainda.</p>}
+              </div>
+            ))}
+          </div>
+          ) : (
           <div className="specials">
             {([["counter", special.counter, special.opp ? `vs ${special.opp}` : "aparece quando o oponente da sua rota for revelado"],
                ["synergy", special.synergy, special.partner ? `com ${special.partner}` : "aparece quando o seu parceiro pickar"]] as const).map(([k, sp, ctx]) => (
@@ -243,6 +272,7 @@ export default function App() {
               </div>
             ))}
           </div>
+          )}
           {top && <BuildPanel champ={top.name} role={myRole} build={builds?.[myRole]?.[top.name] ?? snapshotBuild(top.name, myRole, names)} names={names} enemies={ROLES.map((r) => draft.enemy[r]).filter(Boolean) as string[]} flags={(n) => flags(n)} />}
         </div>
 

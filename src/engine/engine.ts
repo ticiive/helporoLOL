@@ -1,3 +1,4 @@
+import { ADC_BASE, duo, supVs } from "./botlane";
 import { LANE, META, MU, SUPS, SUP_KEYS, SYN_ADC, type SupKey } from "./data";
 import type { Stats } from "../lib/stats";
 import { YUUMI_SYN } from "./snapshot";
@@ -68,6 +69,15 @@ const THREAT: Record<string, [Record<SupKey, number>, string]> = {
   W: [S(0.3, 0.8, 0.3, 0.4, 0, 0.3), "teamfight AoE"],
   N: [S(0, 0, -0.8, 0, 0, 0), "spell shield"],
 };
+/** CC que prende de verdade (stun, root, puxão, engage), contando o time inimigo inteiro: a rota não importa. */
+const CC_EXTRA = new Set(["Senna", "Zyra", "Karma", "Seraphine", "Varus", "Ashe", "Jhin", "Xerath", "Vel'Koz", "Ahri", "Syndra", "Veigar", "Zoe", "Ryze", "Taliyah", "Hwei", "Aurora", "Ziggs", "Mel", "Bard", "Zilean", "Janna"]);
+export function ccThreat(enemies: string[], flags: (n: string | null) => string) {
+  const who = enemies.filter((n) => /[CEH]/.test(flags(n)) || CC_EXTRA.has(n));
+  return { who, level: who.length >= 3 ? 2 : who.length === 2 ? 1 : 0 };
+}
+/** Quem responde a CC em cadeia: escudo que bloqueia CC, tirar CC, bloquear projétil; negativo = parado e sem resposta. */
+const CC_ANSWER: Record<string, number> = { Morgana: 1.8, Milio: 1.4, Braum: 0.8, Lulu: 0.6, Janna: 0.5, Taric: 0.5, Alistar: 0.4, Rakan: 0.3, Zilean: 0.3, Yuumi: 0, Soraka: -1.2, Sona: -1, Nami: -0.5, Seraphine: -0.4 };
+
 const MELEE3 = S(0, 0.6, 0.6, 0.8, 0.4, 0.3);
 const GAP_LABEL: Record<string, string> = {
   nofront: "seu time sem frontline", front2: "frontline forte no seu time", noeng: "seu time sem engage", eng2: "muito engage no seu time",
@@ -217,6 +227,9 @@ export function decide(d: Draft, s: Settings, flags: Flags, stats: Stats, myRole
 
   const cands = candidates(myRole, s, stats);
   if (s.main && myRole === "sup" && !cands.includes(s.main)) cands.push(s.main);
+  const cc = ccThreat(enemies, flags);
+  // muito CC: as respostas entram na lista mesmo fora do seu pool
+  if (isSup && cc.level === 2) for (const n of ["Morgana", "Milio"]) if (!cands.includes(n) && !(s.exclude?.sup ?? []).includes(n)) cands.push(n);
   const results = cands.map((name): Result => {
     const k = isSup ? SUP_BY_NAME[name] ?? null : null;
     const fl = flags(name);
@@ -231,6 +244,11 @@ export function decide(d: Draft, s: Settings, flags: Flags, stats: Stats, myRole
       const dp = dataPts(k, es);
       if (dp) add("dados", dp.pts, `${dp.wr.toFixed(1)}% vs ${es} (${dp.n.toLocaleString("pt-BR")} jogos)`, 0.3);
     }
+    // os outros sups: matchup do op.gg (todas as duplas de sup, Esmeralda+)
+    if (isSup && !k && es) {
+      const m = supVs(name, es);
+      if (m) add("dados", (((m.wr - 50) * m.n) / (m.n + 800)) * 0.7, `${m.wr.toFixed(1)}% vs ${es} (${m.n.toLocaleString("pt-BR")} jogos)`, 0.3);
+    }
     if (k && ea) {
       if (hf(ea, "G")) add("lane", ENEMY_ADC.G[k], `${ea} agressivo na lane`);
       if (hf(ea, "K")) add("lane", ENEMY_ADC.K[k], `${ea} de poke`);
@@ -242,6 +260,11 @@ export function decide(d: Draft, s: Settings, flags: Flags, stats: Stats, myRole
       const c = Math.min(3, pool.filter((n) => hf(n, t) && !(t === "K" && hf(n, "L"))).length);
       if (c) add("comp", (k ? w[k] : genericThreat(t, fl)) * c, `inimigo com ${label}${c > 1 ? ` (${c})` : ""}`);
     }
+    if (cc.level) {
+      const base = isSup ? CC_ANSWER[name] ?? 0 : has(fl, "N") ? 0.8 : 0;
+      const v = base * (cc.level === 2 ? 1 : 0.4);
+      if (v) add("comp", v, v > 0 ? `responde ao CC inimigo (${cc.who.join(", ")})` : `CC demais no inimigo (${cc.who.join(", ")}): tomar um é morte`, 0.3);
+    }
     if (k && enemies.filter((n) => hf(n, "M")).length >= 3) add("comp", MELEE3[k], "muitos melee no inimigo");
     gaps.forEach((g) => add("comp", k ? GAP[g][k] : genericGap(g, fl), GAP_LABEL[g]));
 
@@ -249,8 +272,11 @@ export function decide(d: Draft, s: Settings, flags: Flags, stats: Stats, myRole
       const syn = k ? SYN_ADC[k][A.adc] : undefined;
       if (syn && k) {
         // dado real da dupla, comparado com o winrate médio do sup
-        const d = ((syn.wr - META[k].wr) * syn.n) / (syn.n + 800);
+        const d = ((syn.wr - (META[k].wr + (ADC_BASE[A.adc] ?? 50) - 50)) * syn.n) / (syn.n + 800);
         add("adc", d * 0.5, `com ${A.adc}: ${syn.wr.toFixed(1)}% juntos (${syn.n.toLocaleString("pt-BR")} jogos)`, 0.3);
+      } else if (duo(A.adc, name)) {
+        const du = duo(A.adc, name)!;
+        add("adc", ((du.delta * du.n) / (du.n + 800)) * 0.5, `com ${A.adc}: ${du.wr.toFixed(1)}% juntos (${du.delta >= 0 ? "+" : ""}${du.delta.toFixed(1)} do esperado, ${du.n.toLocaleString("pt-BR")} jogos)`, 0.3);
       } else {
         if (hf(A.adc, "Y")) add("adc", k ? SYN.Y[k] : has(fl, "R") ? 0.8 : 0, `${A.adc} hipercarry`);
         if (hf(A.adc, "G")) add("adc", k ? SYN.G[k] : has(fl, "E") || has(fl, "G") ? 0.8 : -0.3, `${A.adc} quer lane agressiva`);
@@ -320,6 +346,7 @@ export function decide(d: Draft, s: Settings, flags: Flags, stats: Stats, myRole
   const blocked = enemies.filter((n) => s.mainAvoid.includes(n));
   const warned = enemies.filter((n) => s.mainWarn.includes(n) && !s.mainAvoid.includes(n));
   if (warned.length) { main.situation! -= 1.2 * warned.length; main.why.push([-1.2 * warned.length, `alerta pra ${main.name}: ${warned.join(", ")}`]); }
+  if (cc.level === 2) { const v = -0.5 * cc.who.length; main.situation! += v; main.why.push([v, `CC em cadeia (${cc.who.join(", ")}): ${main.name} não tem resposta`]); }
   if (blocked.length) main.why.push([-5, `${blocked.join(", ")}: você não joga ${main.name} contra`]);
   const isBlind = !E.sup;
   if (s.mainNoBlind && isBlind) main.why.push([-5, `não dá pra blindar ${main.name}: espere o sup inimigo aparecer`]);
@@ -329,7 +356,7 @@ export function decide(d: Draft, s: Settings, flags: Flags, stats: Stats, myRole
   else {
     // Main fora: a primeira reserva jogável na sua ordem de preferência; se nenhuma for, a maior nota
     // em blind, a reserva também precisa aguentar o risco inteiro de counter, não só metade
-    const fits = (r: Result) => r.situation! + (isBlind ? 0.5 * r.f.blind * s.weights.blind : 0) >= -s.mainTolerance;
+    const fits = (r: Result) => r.situation! + (isBlind ? 0.5 * r.f.blind * s.weights.blind : 0) >= -s.mainTolerance && !(cc.level === 2 && (CC_ANSWER[r.name] ?? 0) < 0);
     const backup = s.backups.map((n) => results.find((r) => r.name === n && r.status === "ok")).find((r) => r && fits(r));
     if (backup) { ordered = [backup, ...results.filter((r) => r !== backup)]; backup.why.push([2.5, `${backup.name} é sua próxima opção e é jogável aqui`]); }
     const worst = main.why.filter((w) => w[0] < 0).sort((a, b) => a[0] - b[0]).slice(0, 2).map((w) => w[1]).join("; ");
