@@ -24,8 +24,30 @@ const EXAMPLE: Draft = {
 const OWNER_ACC = "ticiive#lett";
 const SYNC_MS = 10 * 60 * 1000;
 
+/** Junta o salvo com o padrão: campo com tipo errado (null, número no lugar de lista) volta pro padrão,
+ *  e objetos (pesos, pool) são mesclados um nível abaixo, pra fatores novos não ficarem undefined. */
+function mergeSaved<T extends object>(init: T, saved: unknown): T {
+  if (!saved || typeof saved !== "object" || Array.isArray(saved)) return init;
+  const out: Record<string, unknown> = { ...(init as Record<string, unknown>) };
+  for (const [k, sv] of Object.entries(saved as Record<string, unknown>)) {
+    const iv = (init as Record<string, unknown>)[k];
+    if (iv === undefined) { out[k] = sv; continue; }
+    if (Array.isArray(iv)) { if (Array.isArray(sv)) out[k] = sv; continue; }
+    if (iv && typeof iv === "object") {
+      if (sv && typeof sv === "object" && !Array.isArray(sv)) {
+        const m: Record<string, unknown> = { ...(iv as object) };
+        for (const [kk, vv] of Object.entries(sv)) { const d = (iv as Record<string, unknown>)[kk]; if (d === undefined || typeof d === typeof vv && Array.isArray(d) === Array.isArray(vv)) m[kk] = vv; }
+        out[k] = m;
+      }
+      continue;
+    }
+    if (typeof sv === typeof iv) out[k] = sv;
+  }
+  return out as T;
+}
+
 function useStored<T extends object>(key: string, init: T) {
-  const [v, setV] = useState<T>(() => { try { const s = localStorage.getItem(key); return s ? { ...init, ...JSON.parse(s) } : init; } catch { return init; } });
+  const [v, setV] = useState<T>(() => { try { const s = localStorage.getItem(key); return s ? mergeSaved(init, JSON.parse(s)) : init; } catch { return init; } });
   useEffect(() => { try { localStorage.setItem(key, JSON.stringify(v)); } catch { /* sem storage */ } }, [key, v]);
   return [v, setV] as const;
 }
@@ -50,7 +72,7 @@ export default function App() {
   useEffect(() => { loadNames(cat.version).then((n) => n && setNames(n)); }, [cat.version]);
   const [timerUrl, setTimerUrl] = useState("");
   // modelo treinado: baixa ao abrir e de hora em hora (o treino roda uma vez por dia)
-  const [trained, setTrained] = useState<TrainedModel | null>(() => { try { return JSON.parse(localStorage.getItem("helporo.model") || "null"); } catch { return null; } });
+  const [trained, setTrained] = useState<TrainedModel | null>(() => { try { const m = JSON.parse(localStorage.getItem("helporo.model") || "null"); return m && m.params && m.champs && m.tagIdx && m.metrics && typeof m.metrics.auc_modelo === "number" ? m : null; } catch { return null; } });
   useEffect(() => {
     const get = () => loadModel().then((m) => { if (m) { setTrained(m); try { localStorage.setItem("helporo.model", JSON.stringify(m)); } catch { /* cheio */ } } });
     get(); const id = setInterval(get, 60 * 60 * 1000); return () => clearInterval(id);

@@ -64,7 +64,7 @@ export async function loadModel(): Promise<TrainedModel | null> {
     const r = await fetch(MODEL_URL, { cache: "no-store" });
     if (!r.ok) return null;
     const m = (await r.json()) as TrainedModel;
-    return m.params && m.champs ? m : null;
+    return m && m.params && m.champs && m.tagIdx && m.metrics && typeof m.metrics.auc_modelo === "number" ? m : null; // modelos antigos sem tagIdx são ignorados
   } catch {
     return null;
   }
