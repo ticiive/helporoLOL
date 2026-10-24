@@ -4,9 +4,6 @@
 //! itens, tempo de partida, objetivos e o coach. Publica só quando algo muda (e um sinal a cada 60 s),
 //! pra ficar dentro do limite do serviço gratuito (a página extrapola o relógio entre uma mensagem e outra).
 
-use std::collections::hash_map::RandomState;
-use std::hash::{BuildHasher, Hasher};
-use std::path::PathBuf;
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -15,35 +12,15 @@ use crate::live;
 const SERVER: &str = "https://ntfy.sh";
 pub const PAGE: &str = "https://ticiive.github.io/helporoLOL/";
 
-fn topic_file() -> PathBuf {
-    let base = std::env::var("APPDATA").or_else(|_| std::env::var("HOME")).unwrap_or_else(|_| ".".into());
-    PathBuf::from(base).join("helporolol").join("relay.txt")
-}
+/// Canal fixo do helporoLOL: a página do GitHub Pages já sabe qual é, então é só abrir o link.
+pub const TOPIC: &str = "helporo-efea0ba1cb0ca5b393f6a2ee";
 
-/// Canal secreto deste PC (criado na primeira vez e guardado): quem não tem o link não acha.
 pub fn topic() -> String {
-    let f = topic_file();
-    if let Ok(t) = std::fs::read_to_string(&f) {
-        let t = t.trim().to_string();
-        if t.len() >= 20 {
-            return t;
-        }
-    }
-    let mut id = String::from("helporo-");
-    for _ in 0..2 {
-        let mut h = RandomState::new().build_hasher();
-        h.write_u128(std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos()).unwrap_or(0));
-        id.push_str(&format!("{:016x}", h.finish()));
-    }
-    if let Some(dir) = f.parent() {
-        let _ = std::fs::create_dir_all(dir);
-    }
-    let _ = std::fs::write(&f, &id);
-    id
+    TOPIC.to_string()
 }
 
 pub fn page_url() -> String {
-    format!("{PAGE}#t={}", topic())
+    PAGE.to_string()
 }
 
 fn publish(topic: &str, body: &str) {

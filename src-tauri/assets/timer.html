@@ -68,8 +68,8 @@ const fmt = (t) => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(
 const demo = new URLSearchParams(location.search).has("demo");
 // Modo internet (GitHub Pages): lê o canal secreto do ntfy.sh que o app do PC publica. Modo local: o próprio PC serve /players.
 const RELAY = location.protocol === "https:" && !demo;
-let TOPIC = (location.hash.match(/t=([\w-]+)/) || [])[1] || "";
-try { if (TOPIC) localStorage.setItem("helporo.topic", TOPIC); else TOPIC = localStorage.getItem("helporo.topic") || ""; } catch {}
+// canal fixo (o mesmo que o app do PC publica); #t=... troca se um dia precisar
+const TOPIC = (location.hash.match(/t=([\w-]+)/) || [])[1] || "helporo-efea0ba1cb0ca5b393f6a2ee";
 let RG = null, RGat = 0, RC = null; // último estado da partida e último coach recebidos
 function relayStart() {
   if (!TOPIC) return;
