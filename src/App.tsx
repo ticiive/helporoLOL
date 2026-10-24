@@ -2,6 +2,7 @@ import { bestWith } from "./engine/botlane";
 import { bestVsAdc, bestVsSup, blindDanger, setLaneData, supBans } from "./engine/lanedata";
 import { gamePlan, type Scaling } from "./engine/gameplan";
 import { CoachPanel } from "./components/CoachPanel";
+import { PhoneLink } from "./components/PhoneLink";
 import { coach as buildCoach } from "./engine/coach";
 import { loadKits, type Kit } from "./lib/spells";
 import { PostGame } from "./components/PostGame";
@@ -113,7 +114,13 @@ export default function App() {
     const tick = () => invoke<string | null>("gameflow_phase").then(setPhase).catch(() => setPhase(null));
     tick(); const id = setInterval(tick, 5000); return () => clearInterval(id);
   }, []);
-  useEffect(() => { if (inTauri()) invoke<string>("timer_url").then(setTimerUrl).catch(() => {}); }, []);
+  const [timerUrls, setTimerUrls] = useState<string[]>([]);
+  const [phoneOpen, setPhoneOpen] = useState(false);
+  useEffect(() => {
+    if (!inTauri()) return;
+    invoke<string>("timer_url").then(setTimerUrl).catch(() => {});
+    invoke<string[]>("timer_urls").then(setTimerUrls).catch(() => {});
+  }, []);
 
   // Seleção de campeões: lê o cliente a cada 1,5 s
   useEffect(() => {
@@ -230,7 +237,7 @@ export default function App() {
           <p className="hint">{inTauri() ? "Abre a seleção no cliente e o draft preenche sozinho, inclusive sua rota. Pausando o modo seguir, dá pra editar à mão." : "Prévia sem o cliente: preenche o draft e escolhe sua rota."}</p>
         </div>
         <div className="tools">
-          {timerUrl && <span className="pill" title="Abra no Mac ou no celular, na mesma rede Wi-Fi">Timer: {timerUrl}</span>}
+          {timerUrl && <button className="ghost" title="Abrir o coach ao vivo no celular ou no Mac" onClick={() => setPhoneOpen(true)}>📱 Celular: {timerUrl.replace("http://", "")}</button>}
           {liveLabel && <span className={`pill ${live?.status === "active" ? "ok" : ""}`}>{liveLabel}</span>}
           {inTauri() && <button className="ghost" onClick={() => setUi({ ...ui, follow: !ui.follow })}>{ui.follow ? "Pausar seguir" : "Seguir cliente"}</button>}
           <button className="ghost" disabled={following} onClick={() => setDraft(EXAMPLE)}>Exemplo</button>
@@ -238,6 +245,7 @@ export default function App() {
         </div>
       </header>
 
+      {phoneOpen && <PhoneLink urls={timerUrls.length ? timerUrls : [timerUrl]} onClose={() => setPhoneOpen(false)} />}
       {update && (
         <div className="banner ok">
           <b>Versão {update.version} disponível.</b> {update.body ? `${update.body} ` : ""}
@@ -249,12 +257,12 @@ export default function App() {
       {!inTauri() && (
         <div className="banner">
           <b>Versão web, modo manual.</b> Ela não lê o cliente nem a partida: preencha o draft à mão. Pra seguir a seleção sozinho, use o app no Windows.
-          Durante a partida, use o timer pelo endereço que o app mostra no topo (tipo <code>http://192.168.0.10:7777</code>).
+          Durante a partida, abra no celular <code>http://helporo.local:7777</code> (o app mostra um QR code no topo).
         </div>
       )}
       {inTauri() && phase === "InProgress" && (
         <div className="banner">
-          <b>Você está em partida.</b> O draft da seleção fica aqui. Pro timer de feitiços, abra no Mac ou no celular: <code>{timerUrl || "http://IP-do-PC:7777"}</code>
+          <b>Você está em partida.</b> O draft da seleção fica aqui. Coach ao vivo e timers no Mac ou no celular: <code>{timerUrl || "http://helporo.local:7777"}</code> <button className="link" onClick={() => setPhoneOpen(true)}>QR code</button>
         </div>
       )}
       {cc.level === 2 && (
@@ -395,7 +403,7 @@ export default function App() {
           <ProfileCard title="Perfil do meu time" p={profile(allies, flags)} side="a" />
           <ProfileCard title="Perfil do inimigo" p={profile(enemies, flags)} side="e" />
         </section>
-        {timerUrl && <p className="note">No celular ou no Mac (mesmo Wi-Fi): <code>{timerUrl}</code> mostra este coach ao vivo, os timers de objetivo e os timers manuais.</p>}
+        {timerUrl && <p className="note">No celular ou no Mac (mesmo Wi-Fi): <code>{timerUrl}</code> mostra este coach ao vivo, os timers de objetivo e os timers manuais. <button className="link" onClick={() => setPhoneOpen(true)}>Mostrar QR code</button></p>}
       </>)}
       {tab === "pos" && <PostGame games={games} bench={bench} cat={cat} gameName={account?.gameName} />}
 

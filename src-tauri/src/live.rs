@@ -96,14 +96,46 @@ fn lan_ip() -> Option<String> {
     best.map(|(_, ip)| ip)
 }
 
+fn ip_now() -> Option<String> {
+    lan_ip().or_else(|| local_ip_address::local_ip().ok().map(|i| i.to_string()))
+}
+
+/// Endereço fixo na rede de casa: o app se anuncia por mDNS como helporo.local, então
+/// http://helporo.local:7777 funciona mesmo quando o IP do PC muda (iPhone, Mac e Windows resolvem .local).
+pub const LOCAL_NAME: &str = "helporo.local";
+
 pub fn url() -> String {
-    let ip = lan_ip()
-        .or_else(|| local_ip_address::local_ip().ok().map(|i| i.to_string()))
-        .unwrap_or_else(|| "IP-do-PC".into());
-    format!("http://{ip}:{PORT}")
+    format!("http://{LOCAL_NAME}:{PORT}")
+}
+
+pub fn ip_url() -> String {
+    format!("http://{}:{PORT}", ip_now().unwrap_or_else(|| "IP-do-PC".into()))
+}
+
+/// Anuncia helporo.local na rede e reanuncia se o IP mudar (Wi-Fi trocou, DHCP deu outro IP).
+fn announce() {
+    thread::spawn(|| {
+        let Ok(daemon) = mdns_sd::ServiceDaemon::new() else { return };
+        let mut current: Option<String> = None;
+        loop {
+            let ip = ip_now();
+            if ip.is_some() && ip != current {
+                if current.is_some() {
+                    let _ = daemon.unregister("helporoLOL._http._tcp.local.");
+                }
+                let addr = ip.clone().unwrap();
+                if let Ok(info) = mdns_sd::ServiceInfo::new("_http._tcp.local.", "helporoLOL", &format!("{LOCAL_NAME}."), addr.as_str(), PORT, None) {
+                    let _ = daemon.register(info);
+                }
+                current = ip;
+            }
+            thread::sleep(std::time::Duration::from_secs(60));
+        }
+    });
 }
 
 pub fn serve() {
+    announce();
     thread::spawn(|| {
         let Ok(server) = tiny_http::Server::http(("0.0.0.0", PORT)) else { return };
         let html = tiny_http::Header::from_bytes("Content-Type", "text/html; charset=utf-8").unwrap();
@@ -126,6 +158,12 @@ pub fn serve() {
 #[tauri::command]
 pub fn timer_url() -> String {
     url()
+}
+
+/// Os dois endereços: o fixo (helporo.local) e o IP atual, pra quando o aparelho não resolver .local.
+#[tauri::command]
+pub fn timer_urls() -> Vec<String> {
+    vec![url(), ip_url()]
 }
 
 /// O app manda o coach atual (JSON) pra página do celular.
