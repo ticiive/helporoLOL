@@ -1,6 +1,7 @@
 import { bestVs, bestWith } from "./engine/botlane";
 import { gamePlan, type Scaling } from "./engine/gameplan";
 import { GamePlanPanel } from "./components/GamePlanPanel";
+import { botChips } from "./components/ResultPanel";
 import { SCALING } from "./engine/scaling";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ChampInput, Icon } from "./components/ChampInput";
@@ -155,8 +156,12 @@ export default function App() {
   const allies = ROLES.filter((r) => r !== myRole).map((r) => draftForMe.ally[r]).filter(Boolean) as string[];
   const enemies = ROLES.map((r) => draft.enemy[r]).filter(Boolean) as string[];
   const top = results[0]?.status === "ok" ? results[0] : null;
+  // o seu pick de verdade (hover ou travado no cliente; à mão no modo manual). A recomendação não muda com ele.
+  const myPick = following && live?.status === "active" ? live.draft.myHover : draft.ally[myRole];
+  const shown = myPick ?? top?.name ?? null;
+  const pickRes = myPick ? results.find((r) => r.name === myPick) : undefined;
   const cc = ccThreat(enemies, flags);
-  const plan = useMemo(() => { try { return gamePlan({ ...draft.ally, [myRole]: top?.name ?? draft.ally[myRole] }, draft.enemy, myRole, flags, scaling); } catch { return null; } }, [draft, myRole, top?.name, flags, scaling]);
+  const plan = useMemo(() => { try { return gamePlan({ ...draft.ally, [myRole]: shown }, draft.enemy, myRole, flags, scaling); } catch { return null; } }, [draft, myRole, shown, flags, scaling]);
   const skipBot = new Set([...ROLES.map((r) => draft.ally[r]), ...ROLES.map((r) => draft.enemy[r]), ...draft.bans, ...(settings.exclude?.sup ?? [])].filter(Boolean) as string[]);
   const poolTag = (n: string) => { const c = stats[n]?.byRole.sup; const g = c ? c.w + c.l : 0; return g >= 20 ? `main seu (${g} jogos)` : g >= 3 || settings.pool.sup.includes(n) ? "no seu pool" : "fora do seu pool"; };
   // opções sinalizadas: um counter do oponente direto e uma sinergia com o parceiro, sempre
@@ -229,11 +234,13 @@ export default function App() {
         <div className="team ally">
           <h2>Meu time</h2>
           {ROLES.map((r) => r === myRole ? (
-            <div key={r} className="slot me">
-              <Icon cat={cat} champ={top ? cat.byName.get(norm(top.name)) ?? null : null} ring="var(--gold)" />
-              <div className="slot-body"><label>{RN[r]} (você){live?.status === "active" && live.draft.myHover ? <span className="fl">hover: {live.draft.myHover}</span> : null}</label>
-                <div className="mine">{top ? top.name : "A definir"}</div></div>
-            </div>
+            following ? (
+              <div key={r} className="slot me">
+                <Icon cat={cat} champ={myPick ? cat.byName.get(norm(myPick)) ?? null : null} ring="var(--gold)" />
+                <div className="slot-body"><label>{RN[r]} (você) <span className="fl">seu pick</span></label>
+                  <div className="mine">{myPick ?? "Escolhendo..."}</div></div>
+              </div>
+            ) : <ChampInput key={r} id={`a-${r}`} side="a" label={`${RN[r]} (você) · seu pick`} cat={cat} value={draft.ally[r]} onChange={(v) => setSlot("ally", r, v)} />
           ) : <ChampInput key={r} id={`a-${r}`} side="a" label={RN[r]} cat={cat} value={draft.ally[r]} disabled={following} onChange={(v) => setSlot("ally", r, v)} />)}
         </div>
 
@@ -279,7 +286,14 @@ export default function App() {
             ))}
           </div>
           )}
-          {top && <BuildPanel champ={top.name} role={myRole} build={builds?.[myRole]?.[top.name] ?? snapshotBuild(top.name, myRole, names)} names={names} enemies={ROLES.map((r) => draft.enemy[r]).filter(Boolean) as string[]} flags={(n) => flags(n)} />}
+          {myPick && top && myPick !== top.name && (
+            <div className="mypick">
+              <b>Você está de {myPick}</b>{pickRes ? ` (nota ${pickRes.score > 0 ? "+" : ""}${pickRes.score.toFixed(1)}; ${top.name}: ${top.score > 0 ? "+" : ""}${top.score.toFixed(1)})` : ""}. Build, runas e plano de jogo abaixo são de {myPick}.
+              {myRole === "sup" && <div className="chips">{botChips(myPick, draft.enemy.sup, draft.ally.adc).map((c) => <span key={c.t} className={`chip ${c.c}`}>{c.t}</span>)}</div>}
+              {pickRes && <ul>{pickRes.why.filter((w) => w[0] < 0).sort((a, b) => a[0] - b[0]).slice(0, 2).map((w) => <li key={w[1]}>{w[1]}</li>)}</ul>}
+            </div>
+          )}
+          {shown && <BuildPanel champ={shown} role={myRole} build={builds?.[myRole]?.[shown] ?? snapshotBuild(shown, myRole, names)} names={names} enemies={ROLES.map((r) => draft.enemy[r]).filter(Boolean) as string[]} flags={(n) => flags(n)} />}
         </div>
 
         <div className="team enemy">

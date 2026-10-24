@@ -178,3 +178,7 @@ details summary { cursor: pointer; }
 .plan .curve .note { grid-column: 1 / -1; margin: 2px 0 0; }
 .plan .tips { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; font-size: 14px; line-height: 1.45; }
 .plan .tips li.tip-do::marker { color: var(--good); } .plan .tips li.tip-avoid::marker { color: var(--bad); }
+.mypick { border: 1px solid var(--gold); border-radius: 8px; padding: 8px 12px; font-size: 13.5px; line-height: 1.5; color: var(--muted); }
+.mypick b { color: var(--gold); }
+.mypick .chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.mypick ul { margin: 4px 0 0; padding-left: 18px; color: var(--bad); }

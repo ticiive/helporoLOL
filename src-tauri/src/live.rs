@@ -43,8 +43,32 @@ fn players() -> serde_json::Value {
     serde_json::json!({ "inGame": true, "me": me, "gameTime": game_time, "players": slim })
 }
 
+/// IP da rede de casa (Wi-Fi/cabo). Pula VPNs como Radmin (26.x) e Hamachi (25.x), que outro
+/// aparelho da casa não alcança, e prefere 192.168.x, depois 10.x e 172.16-31.x.
+fn lan_ip() -> Option<String> {
+    let mut best: Option<(u8, String)> = None;
+    if let Ok(list) = local_ip_address::list_afinet_netifas() {
+        for (_, ip) in list {
+            let std::net::IpAddr::V4(v4) = ip else { continue };
+            let o = v4.octets();
+            let rank = match o {
+                [192, 168, ..] => 0,
+                [10, ..] => 1,
+                [172, b, ..] if (16..=31).contains(&b) => 2,
+                _ => continue, // loopback, VPN (25.x, 26.x), link-local etc.
+            };
+            if best.as_ref().map_or(true, |(r, _)| rank < *r) {
+                best = Some((rank, v4.to_string()));
+            }
+        }
+    }
+    best.map(|(_, ip)| ip)
+}
+
 pub fn url() -> String {
-    let ip = local_ip_address::local_ip().map(|i| i.to_string()).unwrap_or_else(|_| "IP-do-PC".into());
+    let ip = lan_ip()
+        .or_else(|| local_ip_address::local_ip().ok().map(|i| i.to_string()))
+        .unwrap_or_else(|| "IP-do-PC".into());
     format!("http://{ip}:{PORT}")
 }
 
