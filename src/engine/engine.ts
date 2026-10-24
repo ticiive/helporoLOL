@@ -81,7 +81,7 @@ export function ccThreat(enemies: string[], flags: (n: string | null) => string)
   return { who, level: who.length >= 3 ? 2 : who.length === 2 ? 1 : 0 };
 }
 /** Quem responde a CC em cadeia: escudo que bloqueia CC, tirar CC, bloquear projétil; negativo = parado e sem resposta. */
-const CC_ANSWER: Record<string, number> = { Morgana: 1.8, Milio: 1.4, Braum: 0.8, Lulu: 0.6, Janna: 0.5, Taric: 0.5, Alistar: 0.4, Rakan: 0.3, Zilean: 0.3, Yuumi: 0, Soraka: -1.2, Sona: -1, Nami: -0.5, Seraphine: -0.4 };
+export const CC_ANSWER: Record<string, number> = { Morgana: 1.8, Milio: 1.4, Braum: 0.8, Lulu: 0.6, Janna: 0.5, Taric: 0.5, Alistar: 0.4, Rakan: 0.3, Zilean: 0.3, Yuumi: 0, Soraka: -1.2, Sona: -1, Nami: -0.5, Seraphine: -0.4 };
 
 const MELEE3 = S(0, 0.6, 0.6, 0.8, 0.4, 0.3);
 const GAP_LABEL: Record<string, string> = {

@@ -3,7 +3,8 @@ import { bestVsAdc, bestVsSup, blindDanger, setLaneData, supBans } from "./engin
 import { gamePlan, type Scaling } from "./engine/gameplan";
 import { GamePlanPanel } from "./components/GamePlanPanel";
 import { PostGame } from "./components/PostGame";
-import { botChips } from "./components/ResultPanel";
+import { DraftCards, PoolEditor } from "./components/DraftCards";
+import { draftCards } from "./engine/draftScore";
 import { SCALING } from "./engine/scaling";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ChampInput, Icon } from "./components/ChampInput";
@@ -165,8 +166,13 @@ export default function App() {
   const top = results[0]?.status === "ok" ? results[0] : null;
   // o seu pick de verdade (hover ou travado no cliente; à mão no modo manual). A recomendação não muda com ele.
   const myPick = following && live?.status === "active" ? live.draft.myHover : draft.ally[myRole];
-  const shown = myPick ?? top?.name ?? null;
-  const pickRes = myPick ? results.find((r) => r.name === myPick) : undefined;
+  // recomendação nova: só dados, em cards com tier (a antiga fica no "ranking detalhado")
+  const cards = useMemo(() => { try { return draftCards({ role: myRole, draft: draftForMe, flags, counters, synergies, scaling, pool: settings.pool[myRole] ?? [], stats, exclude: settings.exclude?.[myRole] ?? [], main: myRole === "sup" ? settings.main : undefined, mainAvoid: settings.mainAvoid }); } catch { return []; } },
+    [myRole, draftForMe, flags, counters, synergies, scaling, settings.pool, settings.exclude, settings.main, settings.mainAvoid, stats, laneVer]);
+  const bestCard = cards.find((c) => c.inPool) ?? cards[0] ?? null;
+  const pickCard = myPick ? cards.find((c) => c.name === myPick) : undefined;
+  const [poolOpen, setPoolOpen] = useState(false);
+  const shown = myPick ?? bestCard?.name ?? top?.name ?? null;
   const cc = ccThreat(enemies, flags);
   // fase de ban/blind: quem banir e quanto risco tem blindar a main com o que sobrou
   const gone = [...draft.bans, ...ROLES.map((r) => draft.ally[r]), ...ROLES.map((r) => draft.enemy[r])].filter(Boolean) as string[];
@@ -283,7 +289,11 @@ export default function App() {
               )}
             </div>
           )}
-          <ResultPanel results={results} risk={risk} enemySup={myRole === "sup" ? draft.enemy.sup : null} myAdc={myRole === "sup" ? draft.ally.adc : null} enemyAdc={myRole === "sup" ? draft.enemy.adc : null} settings={settings} cat={cat} onLane={setLane} />
+          <DraftCards cards={cards} cat={cat} role={myRole} onPool={() => setPoolOpen(true)} onPick={following ? undefined : (n) => setSlot("ally", myRole, n)} />
+          {poolOpen && <PoolEditor cat={cat} pools={settings.pool} start={myRole} onClose={() => setPoolOpen(false)} onChange={(r, list) => setSettings((x) => ({ ...x, pool: { ...x.pool, [r]: list } }))} />}
+          <details className="oldrank"><summary className="note">Ranking detalhado (regras antigas, com a sua main e o seu histórico)</summary>
+            <ResultPanel results={results} risk={risk} enemySup={myRole === "sup" ? draft.enemy.sup : null} myAdc={myRole === "sup" ? draft.ally.adc : null} enemyAdc={myRole === "sup" ? draft.enemy.adc : null} settings={settings} cat={cat} onLane={setLane} />
+          </details>
           {myRole === "sup" ? (
           <div className="specials bot">
             {([["counter", draft.enemy.sup, `Contra ${draft.enemy.sup ?? "o sup inimigo"} · Mestre+ BR e op.gg`, draft.enemy.sup ? bestVsSup(draft.enemy.sup, skipBot, 4).map((x) => ({ name: x.name, txt: `${x.wr.toFixed(1)}% · ${Math.round(x.n).toLocaleString("pt-BR")}j` })) : []],
@@ -321,11 +331,10 @@ export default function App() {
             ))}
           </div>
           )}
-          {myPick && top && myPick !== top.name && (
+          {myPick && bestCard && myPick !== bestCard.name && (
             <div className="mypick">
-              <b>Você está de {myPick}</b>{pickRes ? ` (nota ${pickRes.score > 0 ? "+" : ""}${pickRes.score.toFixed(1)}; ${top.name}: ${top.score > 0 ? "+" : ""}${top.score.toFixed(1)})` : ""}. Build, runas e plano de jogo abaixo são de {myPick}.
-              {myRole === "sup" && <div className="chips">{botChips(myPick, draft.enemy.sup, draft.ally.adc, draft.enemy.adc).map((c) => <span key={c.t} className={`chip ${c.c}`}>{c.t}</span>)}</div>}
-              {pickRes && <ul>{pickRes.why.filter((w) => w[0] < 0).sort((a, b) => a[0] - b[0]).slice(0, 2).map((w) => <li key={w[1]}>{w[1]}</li>)}</ul>}
+              <b>Você está de {myPick}</b>{pickCard ? ` (tier ${pickCard.tier}, nota ${pickCard.score.toFixed(1)}; ${bestCard.name}: tier ${bestCard.tier}, ${bestCard.score.toFixed(1)})` : ""}. Build, runas e plano de jogo abaixo são de {myPick}.
+              {pickCard && <div className="chips">{pickCard.tags.filter((t) => t.kind !== "info").map((t) => <span key={t.t} className={`chip ${t.kind === "good" ? "good" : "bad"}`}>{t.t}</span>)}</div>}
             </div>
           )}
           {shown && <BuildPanel champ={shown} champKey={cat.byName.get(norm(shown))?.key} role={myRole} build={builds?.[myRole]?.[shown] ?? snapshotBuild(shown, myRole, names)} names={names} enemies={ROLES.map((r) => draft.enemy[r]).filter(Boolean) as string[]} flags={(n) => flags(n)} />}
