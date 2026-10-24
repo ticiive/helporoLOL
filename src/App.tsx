@@ -1,20 +1,22 @@
-import { bestVs, bestWith } from "./engine/botlane";
+import { bestWith } from "./engine/botlane";
+import { bestVsAdc, bestVsSup, blindDanger, setLaneData, supBans } from "./engine/lanedata";
 import { gamePlan, type Scaling } from "./engine/gameplan";
 import { GamePlanPanel } from "./components/GamePlanPanel";
+import { PostGame } from "./components/PostGame";
 import { botChips } from "./components/ResultPanel";
 import { SCALING } from "./engine/scaling";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ChampInput, Icon } from "./components/ChampInput";
 import { ResultPanel } from "./components/ResultPanel";
 import { ProfileCard } from "./components/ProfileCard";
-import { DEFAULT_POOL, DEFAULT_WEIGHTS, FACTORS, ROLES, blindRisk, ccThreat, candidates, decide, laneKey, profile, type Draft, type Role, type Settings, type Team } from "./engine/engine";
+import { BLIND_OK, DEFAULT_POOL, DEFAULT_WEIGHTS, FACTORS, ROLES, blindRisk, ccThreat, candidates, decide, laneKey, profile, type Draft, type Role, type Settings, type Team } from "./engine/engine";
 import { PATCH, type SupKey } from "./engine/data";
 import { loadCatalog, norm, offlineCatalog, type Catalog } from "./lib/ddragon";
 import { inTauri, readChampSelect, readHistory, type Account, type LiveState } from "./lib/lcu";
 import { invoke } from "@tauri-apps/api/core";
 import { confidence, loadModel, predict, type TrainedModel } from "./engine/model";
 import { checkUpdate, installUpdate, type Pending } from "./lib/updater";
-import { loadBuilds, loadCounters, loadNames, loadScaling, loadSynergies, snapshotBuild, type Builds, type Names } from "./lib/builds";
+import { loadBuilds, loadCounters, loadBench, loadLane, loadNames, loadScaling, loadSynergies, snapshotBuild, type Bench, type Builds, type Names } from "./lib/builds";
 import { BuildPanel } from "./components/BuildPanel";
 import { specialPicks, type Counters } from "./engine/engine";
 import { buildStats, loadGames, mergeGames, overall, saveGames, type Game } from "./lib/stats";
@@ -85,6 +87,11 @@ export default function App() {
   // runas, builds e counters (dados Mestre+ da branch data) e nomes do Data Dragon
   const [builds, setBuilds] = useState<Builds | null>(null);
   const [scaling, setScaling] = useState<Scaling>(SCALING);
+  // lane própria (ouro aos 15, sup vs ADC): o motor lê de um módulo; laneVer força recalcular quando chega
+  const [bench, setBench] = useState<Bench | null>(null);
+  useEffect(() => { loadBench().then(setBench).catch(() => {}); }, []);
+  const [laneVer, setLaneVer] = useState(0);
+  useEffect(() => { loadLane().then((d) => { if (d) { setLaneData(d); setLaneVer((v) => v + 1); } }).catch(() => {}); }, []);
   useEffect(() => { loadScaling().then(setScaling).catch(() => {}); }, []);
   const [counters, setCounters] = useState<Counters | null>(null);
   const [synergies, setSynergies] = useState<Counters | null>(null);
@@ -150,7 +157,7 @@ export default function App() {
   const info = useMemo(() => (n: string) => cat.byName.get(norm(n)) ?? null, [cat]);
   const conf = trained ? confidence(trained) : 0;
   const modelZ = useMemo(() => (trained && conf > 0 ? predict(trained, draftForMe) : null), [trained, conf, draftForMe]);
-  const decision = useMemo(() => decide(draftForMe, settings, flags, stats, myRole, info, modelZ, conf, counters, synergies), [draftForMe, settings, flags, stats, myRole, info, modelZ, conf, counters, synergies]);
+  const decision = useMemo(() => decide(draftForMe, settings, flags, stats, myRole, info, modelZ, conf, counters, synergies), [draftForMe, settings, flags, stats, myRole, info, modelZ, conf, counters, synergies, laneVer]);
   const results = decision.results;
   const risk = blindRisk(draftForMe, myRole);
   const allies = ROLES.filter((r) => r !== myRole).map((r) => draftForMe.ally[r]).filter(Boolean) as string[];
@@ -161,6 +168,17 @@ export default function App() {
   const shown = myPick ?? top?.name ?? null;
   const pickRes = myPick ? results.find((r) => r.name === myPick) : undefined;
   const cc = ccThreat(enemies, flags);
+  // fase de ban/blind: quem banir e quanto risco tem blindar a main com o que sobrou
+  const gone = [...draft.bans, ...ROLES.map((r) => draft.ally[r]), ...ROLES.map((r) => draft.enemy[r])].filter(Boolean) as string[];
+  const banTips = useMemo(() => {
+    if (myRole === "sup") return supBans(settings.main, settings.mainAvoid, gone, 3).map((b) => ({ name: b.name, why: b.why }));
+    // outras rotas: quem mais ganha do seu pick (counters Mestre+/op.gg) e ainda está livre
+    const me = myPick ?? top?.name; if (!me || !counters?.[myRole]) return [];
+    return Object.entries(counters[myRole]).map(([opp, rows]) => { const r = rows.find((x) => x[0] === me); return r ? { name: opp, wr: r[1], n: r[2] } : null; })
+      .filter((x): x is { name: string; wr: number; n: number } => !!x && x.wr <= 48 && x.n >= 100 && !gone.includes(x.name))
+      .sort((a, b) => a.wr - b.wr).slice(0, 3).map((x) => ({ name: x.name, why: `${me} tem ${x.wr.toFixed(1)}% contra (${x.n} jogos)` }));
+  }, [myRole, settings.main, settings.mainAvoid, gone.join(","), myPick, top?.name, counters, laneVer]);
+  const blindInfo = myRole === "sup" && !draft.enemy.sup ? blindDanger(settings.main, settings.mainAvoid, gone) : null;
   const plan = useMemo(() => { try { return gamePlan({ ...draft.ally, [myRole]: shown }, draft.enemy, myRole, flags, scaling); } catch { return null; } }, [draft, myRole, shown, flags, scaling]);
   const skipBot = new Set([...ROLES.map((r) => draft.ally[r]), ...ROLES.map((r) => draft.enemy[r]), ...draft.bans, ...(settings.exclude?.sup ?? [])].filter(Boolean) as string[]);
   const poolTag = (n: string) => { const c = stats[n]?.byRole.sup; const g = c ? c.w + c.l : 0; return g >= 20 ? `main seu (${g} jogos)` : g >= 3 || settings.pool.sup.includes(n) ? "no seu pool" : "fora do seu pool"; };
@@ -249,14 +267,31 @@ export default function App() {
             <span className={`pill ${risk >= 0.45 ? "warn" : "ok"}`}>{risk >= 0.45 ? "Blind: oponente direto escondido" : "Oponente direto revelado"}</span>
             <span className="pill">Risco de counter {Math.round(risk * 100)}%</span>
           </div>
-          <ResultPanel results={results} risk={risk} enemySup={myRole === "sup" ? draft.enemy.sup : null} myAdc={myRole === "sup" ? draft.ally.adc : null} settings={settings} cat={cat} onLane={setLane} />
+          {(banTips.length > 0 || blindInfo) && !draft.enemy[myRole] && (
+            <div className="banpanel">
+              {banTips.length > 0 && <div className="lbl">Sugestão de ban</div>}
+              {banTips.map((b) => (
+                <div key={b.name} className="alt">
+                  <Icon cat={cat} champ={cat.byName.get(norm(b.name)) ?? null} size={26} ring="var(--bad)" />
+                  <b>{b.name}<small> {b.why}</small></b><span /><span />
+                </div>
+              ))}
+              {blindInfo && (
+                <p className={`note ${blindInfo.risk <= (settings.blindMax ?? BLIND_OK) ? "okTxt" : "warnTxt"}`}>
+                  Blind de {settings.main} agora: {Math.round(blindInfo.risk * 100)}% de chance de vir um sup que pune ela{blindInfo.likely.length ? ` (${blindInfo.likely.join(", ")})` : ""}. Seu limite: {Math.round((settings.blindMax ?? BLIND_OK) * 100)}%.
+                </p>
+              )}
+            </div>
+          )}
+          <ResultPanel results={results} risk={risk} enemySup={myRole === "sup" ? draft.enemy.sup : null} myAdc={myRole === "sup" ? draft.ally.adc : null} enemyAdc={myRole === "sup" ? draft.enemy.adc : null} settings={settings} cat={cat} onLane={setLane} />
           {myRole === "sup" ? (
           <div className="specials bot">
-            {([["counter", draft.enemy.sup, `Contra ${draft.enemy.sup ?? "o sup inimigo"}`, draft.enemy.sup ? bestVs(draft.enemy.sup, skipBot, 4).map((x) => ({ name: x.name, txt: `${x.wr.toFixed(1)}% · ${x.n.toLocaleString("pt-BR")}j` })) : []],
-               ["synergy", draft.ally.adc, `Com ${draft.ally.adc ?? "o seu ADC"}`, draft.ally.adc ? bestWith(draft.ally.adc, skipBot, 4).map((x) => ({ name: x.name, txt: `${x.wr.toFixed(1)}% (${x.delta >= 0 ? "+" : ""}${x.delta.toFixed(1)}) · ${x.n.toLocaleString("pt-BR")}j` })) : []]] as const).map(([k, who, title, rows]) => (
-              <div key={k} className={`special ${k}`}>
-                <div className="lbl">{k === "counter" ? "Bom contra" : "Bom com"} <span className="note">{title} · op.gg Esmeralda+</span></div>
-                {!who ? <p className="note">{k === "counter" ? "Aparece quando o sup inimigo for revelado." : "Aparece quando o seu ADC pickar."}</p>
+            {([["counter", draft.enemy.sup, `Contra ${draft.enemy.sup ?? "o sup inimigo"} · Mestre+ BR e op.gg`, draft.enemy.sup ? bestVsSup(draft.enemy.sup, skipBot, 4).map((x) => ({ name: x.name, txt: `${x.wr.toFixed(1)}% · ${Math.round(x.n).toLocaleString("pt-BR")}j` })) : []],
+               ["counter", draft.enemy.adc, `Contra ${draft.enemy.adc ?? "o ADC inimigo"} (ADC) · Mestre+ BR`, draft.enemy.adc ? bestVsAdc(draft.enemy.adc, skipBot, 4).map((x) => ({ name: x.name, txt: `${x.wr.toFixed(1)}%${x.gd !== null ? ` · ${x.gd >= 0 ? "+" : ""}${x.gd} ouro aos 15` : ""} · ${x.n}j` })) : []],
+               ["synergy", draft.ally.adc, `Com ${draft.ally.adc ?? "o seu ADC"} · op.gg`, draft.ally.adc ? bestWith(draft.ally.adc, skipBot, 4).map((x) => ({ name: x.name, txt: `${x.wr.toFixed(1)}% (${x.delta >= 0 ? "+" : ""}${x.delta.toFixed(1)}) · ${x.n.toLocaleString("pt-BR")}j` })) : []]] as const).map(([k, who, title, rows]) => (
+              <div key={title} className={`special ${k}`}>
+                <div className="lbl">{k === "counter" ? "Bom contra" : "Bom com"} <span className="note">{title}</span></div>
+                {!who ? <p className="note">{k === "counter" ? "Aparece quando o inimigo pickar." : "Aparece quando o seu ADC pickar."}</p>
                   : rows.length ? rows.map((x) => (
                     <div key={x.name} className="alt">
                       <Icon cat={cat} champ={cat.byName.get(norm(x.name)) ?? null} size={26} />
@@ -289,11 +324,11 @@ export default function App() {
           {myPick && top && myPick !== top.name && (
             <div className="mypick">
               <b>Você está de {myPick}</b>{pickRes ? ` (nota ${pickRes.score > 0 ? "+" : ""}${pickRes.score.toFixed(1)}; ${top.name}: ${top.score > 0 ? "+" : ""}${top.score.toFixed(1)})` : ""}. Build, runas e plano de jogo abaixo são de {myPick}.
-              {myRole === "sup" && <div className="chips">{botChips(myPick, draft.enemy.sup, draft.ally.adc).map((c) => <span key={c.t} className={`chip ${c.c}`}>{c.t}</span>)}</div>}
+              {myRole === "sup" && <div className="chips">{botChips(myPick, draft.enemy.sup, draft.ally.adc, draft.enemy.adc).map((c) => <span key={c.t} className={`chip ${c.c}`}>{c.t}</span>)}</div>}
               {pickRes && <ul>{pickRes.why.filter((w) => w[0] < 0).sort((a, b) => a[0] - b[0]).slice(0, 2).map((w) => <li key={w[1]}>{w[1]}</li>)}</ul>}
             </div>
           )}
-          {shown && <BuildPanel champ={shown} role={myRole} build={builds?.[myRole]?.[shown] ?? snapshotBuild(shown, myRole, names)} names={names} enemies={ROLES.map((r) => draft.enemy[r]).filter(Boolean) as string[]} flags={(n) => flags(n)} />}
+          {shown && <BuildPanel champ={shown} champKey={cat.byName.get(norm(shown))?.key} role={myRole} build={builds?.[myRole]?.[shown] ?? snapshotBuild(shown, myRole, names)} names={names} enemies={ROLES.map((r) => draft.enemy[r]).filter(Boolean) as string[]} flags={(n) => flags(n)} />}
         </div>
 
         <div className="team enemy">
@@ -320,6 +355,7 @@ export default function App() {
       <datalist id="champ-list">{cat.list.map((c) => <option key={c.name} value={c.name} />)}</datalist>
 
       <GamePlanPanel plan={plan} />
+      <PostGame games={games} bench={bench} />
 
       <section className="comps">
         <ProfileCard title="Perfil do meu time" p={profile(allies, flags)} side="a" />
@@ -384,6 +420,11 @@ export default function App() {
               <label htmlFor="main-tol">Tolerância</label>
               <input type="range" id="main-tol" min={0} max={6} step={0.5} value={settings.mainTolerance} onChange={(e) => setSettings((s) => ({ ...s, mainTolerance: +e.target.value }))} />
               <output>{settings.mainTolerance.toFixed(1)}</output>
+            </div>
+            <div className="sl">
+              <label htmlFor="blind-max">Blind até</label>
+              <input type="range" id="blind-max" min={0} max={40} step={1} value={Math.round((settings.blindMax ?? BLIND_OK) * 100)} onChange={(e) => setSettings((s) => ({ ...s, blindMax: +e.target.value / 100 }))} />
+              <output>{Math.round((settings.blindMax ?? BLIND_OK) * 100)}%</output>
             </div>
             {([["mainAvoid", "Bloqueia a main", "var(--bad)", avoidText, setAvoidText], ["mainWarn", "Alerta (soma com o draft)", "var(--warn)", warnText, setWarnText]] as const).map(([key, label, color, text, setText]) => (
               <div key={key}>

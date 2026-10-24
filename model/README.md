@@ -36,3 +36,14 @@ pip install numpy
 python model/fake_data.py 20000 4
 HELPORO_DATA=model/data_fake python model/train.py
 ```
+
+## Lane em ouro, sup contra ADC e revisão pós-jogo (v0.4)
+
+- `collect.py` agora guarda as estatísticas finais de cada jogador e, nas partidas com um dos sups do modelo,
+  baixa a timeline (ouro, CS e XP aos 10 e 15 min) em `data/gold.jsonl.gz`. Quando sobra tempo na rodada,
+  preenche a timeline das partidas antigas. Ele usa o limite real da chave (cabeçalho `X-App-Rate-Limit`).
+- `lane.py` gera `out/lane.json`: cada sup contra o sup inimigo, contra o ADC inimigo e junto de cada ADC,
+  em winrate e em diferença de ouro da dupla aos 15 min (mede a lane com menos ruído que a vitória).
+  Também checa se o ouro aos 15 prevê a vitória e se o efeito do matchup se repete entre metades dos dados.
+- `bench.py` gera `out/bench.json`: médias Mestre+/D1 BR por campeão e rota (mortes, visão, controles, CS, dano),
+  usadas na revisão pós-jogo do app.

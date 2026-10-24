@@ -1,4 +1,4 @@
-import type { Plan } from "../engine/gameplan";
+import { PHASES, type Plan } from "../engine/gameplan";
 
 /** Plano de jogo: curva de força por duração, em volta de quem jogar e o que evitar. */
 export function GamePlanPanel({ plan }: { plan: Plan | null }) {
@@ -21,8 +21,18 @@ export function GamePlanPanel({ plan }: { plan: Plan | null }) {
       <ul className="tips">
         {plan.focus && <li className="tip-do">Jogue em volta de <b>{plan.focus.name}</b> ({plan.focus.role}): {plan.focus.why}.</li>}
         {plan.threat && <li className="tip-avoid">{plan.threat}</li>}
-        {plan.tips.map((t) => <li key={t.t} className={`tip-${t.kind}`}>{t.t}</li>)}
       </ul>
+      <div className="phases">
+        {PHASES.map(([ph, label]) => {
+          const list = plan.tips.filter((t) => t.phase === ph).slice(0, 3);
+          return (
+            <div key={ph} className="phase">
+              <div className="lbl">{label}</div>
+              {list.length ? <ul className="tips">{list.map((t) => <li key={t.t} className={`tip-${t.kind}`}>{t.t}</li>)}</ul> : <p className="note">Nada especial: jogo padrão.</p>}
+            </div>
+          );
+        })}
+      </div>
     </section>
   );
 }

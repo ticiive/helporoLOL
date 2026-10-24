@@ -35,6 +35,8 @@ fn players() -> serde_json::Value {
                 "position": p.get("position"),
                 "spell1": p.pointer("/summonerSpells/summonerSpellOne/rawDisplayName"),
                 "spell2": p.pointer("/summonerSpells/summonerSpellTwo/rawDisplayName"),
+                // itens são públicos (placar do jogo): base da sugestão de itens que se ajusta durante a partida
+                "items": p.get("items").and_then(|v| v.as_array()).map(|a| a.iter().filter_map(|i| i.get("itemID").and_then(|x| x.as_u64())).collect::<Vec<_>>()),
             })
         })
         .collect();

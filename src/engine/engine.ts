@@ -1,4 +1,7 @@
 import { ADC_BASE, duo, supVs } from "./botlane";
+import { blindDanger, ownVsAdc, ownVsSup } from "./lanedata";
+/** Até essa chance de vir um sup que pune a main, dá pra blindar (ajustável em Configurações). */
+export const BLIND_OK = 0.12;
 import { LANE, META, MU, SUPS, SUP_KEYS, SYN_ADC, type SupKey } from "./data";
 import type { Stats } from "../lib/stats";
 import { YUUMI_SYN } from "./snapshot";
@@ -31,6 +34,8 @@ export interface Settings {
   mainAvoid: string[];
   /** alerta: pesa contra a main e soma com o resto do draft, mas sozinho não bloqueia */
   mainWarn: string[];
+  /** risco máximo (0-1) de vir um sup que pune a main pra ainda blindar ela */
+  blindMax?: number;
   /** reservas em ordem de preferência, testadas com a mesma regra quando a main é evitada */
   backups: string[];
   /** sup (e de preferência ADC) inimigo tem que estar revelado pra sugerir a main */
@@ -249,9 +254,21 @@ export function decide(d: Draft, s: Settings, flags: Flags, stats: Stats, myRole
       const m = supVs(name, es);
       if (m) add("dados", (((m.wr - 50) * m.n) / (m.n + 800)) * 0.7, `${m.wr.toFixed(1)}% vs ${es} (${m.n.toLocaleString("pt-BR")} jogos)`, 0.3);
     }
-    if (k && ea) {
+    // contra o ADC inimigo: dado próprio (Mestre+/D1 BR) quando tem amostra; senão as tags
+    const oa = isSup && ea ? ownVsAdc(name, ea) : null;
+    if (oa && oa.n >= 40) {
+      const useGold = oa.gd !== null && oa.ng >= 30;
+      const v = useGold ? (oa.gd! - oa.baseGd) / 300 : (((oa.wr - oa.base) * oa.n) / (oa.n + 150)) * 0.25;
+      add("lane", v, `vs ${ea} (ADC): ${oa.wr.toFixed(1)}% em ${oa.n} jogos${useGold ? ` · ${oa.gd! - oa.baseGd >= 0 ? "+" : ""}${oa.gd! - oa.baseGd} de ouro aos 15` : ""}`, 0.3);
+    } else if (k && ea) {
       if (hf(ea, "G")) add("lane", ENEMY_ADC.G[k], `${ea} agressivo na lane`);
       if (hf(ea, "K")) add("lane", ENEMY_ADC.K[k], `${ea} de poke`);
+    }
+    // ouro aos 15 contra o sup inimigo (timeline): mede a lane com menos ruído que a vitória
+    const os_ = isSup && es ? ownVsSup(name, es) : null;
+    if (os_ && os_.gd !== null && os_.ng >= 30) {
+      const dg = os_.gd - os_.baseGd;
+      add("lane", dg / 300, `ouro aos 15 vs ${es}: ${dg >= 0 ? "+" : ""}${dg} (${os_.ng} jogos)`, 0.3);
     }
 
     for (const [t, [w, label]] of Object.entries(THREAT)) {
@@ -349,8 +366,17 @@ export function decide(d: Draft, s: Settings, flags: Flags, stats: Stats, myRole
   if (cc.level === 2) { const v = -0.5 * cc.who.length; main.situation! += v; main.why.push([v, `CC em cadeia (${cc.who.join(", ")}): ${main.name} não tem resposta`]); }
   if (blocked.length) main.why.push([-5, `${blocked.join(", ")}: você não joga ${main.name} contra`]);
   const isBlind = !E.sup;
-  if (s.mainNoBlind && isBlind) main.why.push([-5, `não dá pra blindar ${main.name}: espere o sup inimigo aparecer`]);
-  const kept = !blocked.length && !(s.mainNoBlind && isBlind) && main.situation! >= -s.mainTolerance;
+  // blind: olha quem ainda pode vir (banidos e pickados saem) e a chance de ser um que pune a main
+  let blindOk = false;
+  if (s.mainNoBlind && isBlind) {
+    const gone = [...d.bans, ...ROLES.map((r) => A[r]), ...ROLES.map((r) => E[r])].filter(Boolean) as string[];
+    const bd = blindDanger(main.name, s.mainAvoid, gone);
+    const pct = Math.round(bd.risk * 100);
+    blindOk = bd.risk <= (s.blindMax ?? BLIND_OK);
+    if (blindOk) { main.situation! -= 0.5; main.why.push([-0.5, `blind dá: só ${pct}% de chance de vir sup que pune ${main.name} (os perigosos estão banidos ou pickados)`]); }
+    else main.why.push([-5, `blind arriscado: ${pct}% de chance de vir ${bd.likely.join(", ")}; espere o sup inimigo`]);
+  }
+  const kept = !blocked.length && !(s.mainNoBlind && isBlind && !blindOk) && main.situation! >= -s.mainTolerance;
   let ordered = kept ? [main, ...results.filter((r) => r !== main)] : results;
   if (kept) main.why.push([3, results[0] === main ? `${main.name} é sua main e encaixa bem` : `jogável de ${main.name}: sua main fica`]);
   else {

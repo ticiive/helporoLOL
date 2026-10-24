@@ -167,3 +167,27 @@ pub async fn set_rune_page(name: String, primary: i64, sub: i64, perks: Vec<i64>
     });
     send(reqwest::Method::POST, "/lol-perks/v1/pages", Some(body)).await.map(|_| ())
 }
+
+/// Cria (ou atualiza) um conjunto de itens no cliente pro campeão, que aparece na loja dentro da partida.
+/// `blocks` já vem no formato do cliente: [{ "type": "...", "items": [{ "id": "3865", "count": 1 }] }].
+#[tauri::command]
+pub async fn set_item_set(title: String, champ_key: i64, blocks: serde_json::Value) -> Result<(), String> {
+    let me = get("/lol-summoner/v1/current-summoner").await?.and_then(|r| r.ok()).ok_or("Cliente do LoL fechado")?;
+    let sid = me.get("summonerId").and_then(|v| v.as_i64()).ok_or("sem summonerId")?;
+    let path = format!("/lol-item-sets/v1/item-sets/{sid}/sets");
+    let mut cur = get(&path).await?.and_then(|r| r.ok()).unwrap_or_else(|| serde_json::json!({ "itemSets": [] }));
+    let uid = format!("helporo-{champ_key}");
+    let set = serde_json::json!({
+        "uid": uid, "title": title, "type": "custom", "map": "any", "mode": "any", "sortrank": 0,
+        "startedFrom": "blank", "associatedChampions": [champ_key], "associatedMaps": [11],
+        "preferredItemSlots": [], "blocks": blocks
+    });
+    let mut sets: Vec<serde_json::Value> = cur.get("itemSets").and_then(|v| v.as_array()).cloned().unwrap_or_default();
+    sets.retain(|s| s.get("uid").and_then(|u| u.as_str()) != Some(uid.as_str()));
+    sets.push(set);
+    cur["itemSets"] = serde_json::Value::Array(sets);
+    if cur.get("accountId").is_none() {
+        cur["accountId"] = me.get("accountId").cloned().unwrap_or(serde_json::json!(0));
+    }
+    send(reqwest::Method::PUT, &path, Some(cur)).await.map(|_| ())
+}

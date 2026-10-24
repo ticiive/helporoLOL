@@ -57,6 +57,14 @@ jobs:
         working-directory: model
         run: python scaling.py
 
+      - name: Lane em ouro aos 15 e sup contra ADC inimigo
+        working-directory: model
+        run: python lane.py
+
+      - name: Médias Mestre+ pra revisão pós-jogo
+        working-directory: model
+        run: python bench.py
+
       - name: Salva dados e modelo na branch data
         if: always()
         run: |

@@ -90,7 +90,7 @@ export async function readChampSelect(cat: Catalog): Promise<LiveState> {
 
 // ---------- histórico pessoal ----------
 interface HistGame {
-  gameId: number; gameCreation: number; queueId: number;
+  gameId: number; gameCreation: number; queueId: number; gameDuration?: number;
   participants?: { championId: number; spell1Id?: number; spell2Id?: number; stats?: { win?: boolean } & Record<string, unknown>; timeline?: { lane?: string; role?: string } }[];
 }
 // Item de sup (linha do World Atlas) e Smite: dizem a rota com certeza, melhor que a lane do cliente
@@ -138,7 +138,10 @@ export async function readHistory(cat: Catalog): Promise<{ account: Account; gam
       // o cliente disse "sup" mas não tinha item de sup: era o carry do bot (ou o mid, se a lane for mid)
       if (role === "sup" && !supItem && anyItem) role = (p.timeline?.lane ?? "").toUpperCase().startsWith("MID") ? "mid" : "adc";
       // o cliente disse outra rota mas tinha item de sup: era sup (ex.: sup que rodou pro mid)
-      games.push({ id: g.gameId, t: g.gameCreation, champ, role, win: !!p.stats?.win });
+      const st = (k: string) => Number(p.stats?.[k] ?? 0);
+      games.push({ id: g.gameId, t: g.gameCreation, champ, role, win: !!p.stats?.win, min: (g.gameDuration ?? 0) / 60,
+        s: { k: st("kills"), d: st("deaths"), a: st("assists"), cs: st("totalMinionsKilled") + st("neutralMinionsKilled"),
+             vs: st("visionScore"), cw: st("visionWardsBoughtInGame"), dmg: st("totalDamageDealtToChampions") } });
     }
     if (list.length < 90) break;
   }

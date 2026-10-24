@@ -1,19 +1,24 @@
 import { FACTORS, laneDefault, laneValue, type Result, type Settings } from "../engine/engine";
 import { META, MU, SUPS, SUP_COLOR, SUP_KEYS, SYN_ADC, type SupKey } from "../engine/data";
-import { ADC_BASE, duo, supVs } from "../engine/botlane";
+import { ADC_BASE, duo } from "../engine/botlane";
+import { combinedVsSup, ownVsAdc } from "../engine/lanedata";
 import { Icon } from "./ChampInput";
 import { norm, type Catalog } from "../lib/ddragon";
 
-interface Props { results: Result[]; risk: number; enemySup: string | null; myAdc?: string | null; settings: Settings; cat: Catalog; onLane: (k: SupKey, v: number | null) => void }
+interface Props { results: Result[]; risk: number; enemySup: string | null; enemyAdc?: string | null; myAdc?: string | null; settings: Settings; cat: Catalog; onLane: (k: SupKey, v: number | null) => void }
 
 const KEY_OF = Object.fromEntries(SUP_KEYS.map((k) => [SUPS[k], k])) as Record<string, SupKey>;
 /** "bom contra X" / "bom com X" de cada sup: tabela maior (Lolalytics) nos 6 sups, op.gg nos outros. */
-export function botChips(name: string, es: string | null, adc: string | null) {
+export function botChips(name: string, es: string | null, adc: string | null, ea: string | null = null) {
   const out: { t: string; c: "good" | "bad" | "flat" }[] = [];
   const k = KEY_OF[name];
   if (es) {
-    const m = supVs(name, es) ?? (k && MU[k][es] ? { wr: MU[k][es].wr, n: MU[k][es].n } : null);
+    const m = combinedVsSup(name, es) ?? (k && MU[k][es] ? { wr: MU[k][es].wr, n: MU[k][es].n } : null);
     if (m && m.n >= 150) out.push({ t: `${m.wr >= 51.5 ? "bom" : m.wr <= 48.5 ? "ruim" : "neutro"} contra ${es} ${m.wr.toFixed(1)}%`, c: m.wr >= 51.5 ? "good" : m.wr <= 48.5 ? "bad" : "flat" });
+  }
+  if (ea) {
+    const r = ownVsAdc(name, ea);
+    if (r && r.n >= 40) { const d = r.wr - r.base; out.push({ t: `${d >= 1.5 ? "bom" : d <= -1.5 ? "ruim" : "neutro"} contra ${ea} (ADC) ${r.wr.toFixed(1)}%`, c: d >= 1.5 ? "good" : d <= -1.5 ? "bad" : "flat" }); }
   }
   if (adc) {
     const d = duo(adc, name) ?? (k && SYN_ADC[k][adc] ? { delta: SYN_ADC[k][adc].wr - (META[k].wr + (ADC_BASE[adc] ?? 50) - 50), wr: SYN_ADC[k][adc].wr, n: SYN_ADC[k][adc].n } : null);
@@ -36,7 +41,7 @@ function Bar({ label, v }: { label: string; v: number }) {
   );
 }
 
-export function ResultPanel({ results, risk, enemySup, myAdc = null, settings, cat, onLane }: Props) {
+export function ResultPanel({ results, risk, enemySup, enemyAdc = null, myAdc = null, settings, cat, onLane }: Props) {
   const top = results[0];
   if (!top || top.status !== "ok") return <p className="empty">Nenhum campeão disponível pra essa rota. Adiciona opções no pool da rota, lá embaixo.</p>;
   const pos = top.why.filter((x) => x[0] > 0).sort((a, b) => b[0] - a[0]).slice(0, 4);
@@ -75,7 +80,7 @@ export function ResultPanel({ results, risk, enemySup, myAdc = null, settings, c
                 </div>
               ) : <span />}
               <span className="sc">{r.status === "banned" ? "banido" : r.status === "picked" ? "pickado" : `${r.score > 0 ? "+" : ""}${r.score.toFixed(1)}`}</span>
-              {anySup && (enemySup || myAdc) && <div className="chips">{botChips(r.name, enemySup, myAdc).map((c) => <span key={c.t} className={`chip ${c.c}`}>{c.t}</span>)}</div>}
+              {anySup && (enemySup || myAdc || enemyAdc) && <div className="chips">{botChips(r.name, enemySup, myAdc, enemyAdc).map((c) => <span key={c.t} className={`chip ${c.c}`}>{c.t}</span>)}</div>}
             </div>
           );
         })}

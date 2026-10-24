@@ -128,3 +128,8 @@ export const loadScaling = async () => {
   const own = await getJson<typeof SCALING>("scaling.json");
   return own && own.bins && Object.keys(own.champs ?? {}).length > 50 ? own : SCALING;
 };
+
+/** Lane do sup (ouro aos 15, sup vs ADC) e médias pra revisão pós-jogo, da branch data. */
+export const loadLane = () => getJson<import("../engine/lanesnap").LaneData>("lane.json");
+export type Bench = Record<string, Record<string, Record<string, [number, number]> & { n: number }>>;
+export const loadBench = () => getJson<Bench>("bench.json");

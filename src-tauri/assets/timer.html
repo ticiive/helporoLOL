@@ -31,18 +31,23 @@ h1 { font-family:var(--display); font-size:20px; margin:0; letter-spacing:.04em;
 .empty { color:var(--muted); font-size:14px; background:var(--panel); border:1px dashed var(--line); border-radius:8px; padding:18px; text-align:center; line-height:1.5; }
 .empty button { margin-top:10px; font:inherit; font-size:13px; background:var(--panel2); color:var(--fg); border:1px solid var(--line); border-radius:6px; padding:6px 12px; cursor:pointer; }
 .note { font-size:12px; color:var(--muted); }
+.threat{margin:14px 0;padding:10px 12px;border:1px solid #2a2f3a;border-radius:10px;font-size:14px;line-height:1.5}.threat h2{font-size:15px;margin:0 0 6px}.threat p{margin:4px 0}
 </style>
 </head>
 <body>
 <div class="wrap">
   <header><h1>helporo<span>LOL</span> timer</h1><span class="st"><span class="clock" id="clock"></span> <span id="st">conectando…</span></span></header>
   <div id="list"><div class="empty">Procurando a partida…</div></div>
+  <section id="threat" class="threat"></section>
   <p class="note">Toque quando VIR o feitiço ou o ult sendo usado. Toque de novo pra cancelar. Embaixo do quadrado aparece o horário da partida em que volta, pra mandar no chat. Feitiços: tempo base. Ult: tempo do nível atual com uma estimativa média de aceleração de habilidade pelo tempo de jogo (sem ler item nem runa), por isso o ~.</p>
 </div>
 <script>
 const CDN = "https://ddragon.leagueoflegends.com";
 const $ = (id) => document.getElementById(id);
-let V = "", CHAMPS = {}, SPELLS = {}, ULT = {}, enemies = [], timers = {};
+let V = "", CHAMPS = {}, SPELLS = {}, ULT = {}, ITEMS = {}, enemies = [], timers = {};
+const HEALERS = ["Soraka","Yuumi","Sona","Nami","Milio","Aatrox","Vladimir","DrMundo","Warwick","Sylas","Fiddlesticks","Swain","Briar","Olaf","Illaoi","Renekton","Seraphine","Senna","Taric","Belveth"];
+// itens sugeridos por ameaça (ids do Data Dragon; o nome aparece em português)
+const ANSWERS = { ap: [3111, 3190, 4401], ad: [3047, 3190, 3075], heal: [3011, 3165, 3123], cc: [3222, 3111], burst: [3190, 3107, 2065] };
 let clockBase = null; // { game: segundos de partida, at: Date.now() da leitura }
 const gameNow = () => (clockBase ? clockBase.game + (Date.now() - clockBase.at) / 1000 : null);
 const fmt = (t) => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, "0")}`;
@@ -53,6 +58,7 @@ async function boot() {
     V = (await (await fetch(`${CDN}/api/versions.json`)).json())[0];
     const [c, s] = await Promise.all([fetch(`${CDN}/cdn/${V}/data/en_US/champion.json`), fetch(`${CDN}/cdn/${V}/data/en_US/summoner.json`)].map((p) => p.then((r) => r.json())));
     CHAMPS = c.data; SPELLS = s.data;
+    try { ITEMS = (await (await fetch(`${CDN}/cdn/${V}/data/pt_BR/item.json`)).json()).data; } catch {}
   } catch { $("st").textContent = "sem internet pros ícones"; }
   poll(); setInterval(poll, 5000);
   try { await navigator.wakeLock?.request("screen"); } catch {}
@@ -74,8 +80,8 @@ async function poll() {
   if (demo) data = { inGame: true, me: "eu#br1", gameTime: (clockBase ? gameNow() : 14 * 60 + 5), players: [
     { riotId: "eu#br1", team: "ORDER", champ: "game_character_displayname_Soraka", level: 9, spell1: "x_SummonerSpell_SummonerFlash_DisplayName", spell2: "x_SummonerSpell_SummonerDot_DisplayName" },
     { riotId: "a", team: "CHAOS", champ: "game_character_displayname_Garen", level: 11, spell1: "x_SummonerSpell_SummonerFlash_DisplayName", spell2: "x_SummonerSpell_SummonerTeleport_DisplayName" },
-    { riotId: "b", team: "CHAOS", champ: "game_character_displayname_LeeSin", level: 10, spell1: "x_SummonerSpell_SummonerSmite_DisplayName", spell2: "x_SummonerSpell_SummonerFlash_DisplayName" },
-    { riotId: "c", team: "CHAOS", champ: "game_character_displayname_Ahri", level: 10, spell1: "x_SummonerSpell_SummonerFlash_DisplayName", spell2: "x_SummonerSpell_SummonerDot_DisplayName" },
+    { riotId: "b", team: "CHAOS", champ: "game_character_displayname_LeeSin", level: 10, items: [6692], spell1: "x_SummonerSpell_SummonerSmite_DisplayName", spell2: "x_SummonerSpell_SummonerFlash_DisplayName" },
+    { riotId: "c", team: "CHAOS", champ: "game_character_displayname_Ahri", level: 10, items: [3165, 3020, 4645], spell1: "x_SummonerSpell_SummonerFlash_DisplayName", spell2: "x_SummonerSpell_SummonerDot_DisplayName" },
     { riotId: "d", team: "CHAOS", champ: "game_character_displayname_Jinx", level: 9, spell1: "x_SummonerSpell_SummonerFlash_DisplayName", spell2: "x_SummonerSpell_SummonerHeal_DisplayName" },
     { riotId: "e", team: "CHAOS", champ: "game_character_displayname_Thresh", level: 5, spell1: "x_SummonerSpell_SummonerFlash_DisplayName", spell2: "x_SummonerSpell_SummonerExhaust_DisplayName" }] };
   else { try { data = await (await fetch("/players", { cache: "no-store" })).json(); } catch { data = null; } }
@@ -89,6 +95,37 @@ async function poll() {
   for (const p of list) p.ult = await ultCd(champId(p.champ));
   $("st").textContent = demo ? "demonstração" : "em partida";
   render(list);
+  threat(list);
+}
+
+// Ameaças pelos itens que os inimigos já fecharam (os mesmos que aparecem no placar) e o que responde a elas.
+function threat(list) {
+  const el = $("threat"); if (!el) return;
+  if (!list.length || !Object.keys(ITEMS).length) { el.innerHTML = ""; return; }
+  let ap = 0, ad = 0, heal = 0; const fed = [];
+  for (const p of list) {
+    let gold = 0;
+    for (const id of p.items || []) {
+      const it = ITEMS[id]; if (!it) continue;
+      const g = it.gold?.total || 0, tags = it.tags || [];
+      gold += g;
+      if (tags.includes("SpellDamage")) ap += g;
+      if (tags.includes("Damage") || tags.includes("CriticalStrike")) ad += g;
+      if (tags.includes("LifeSteal") || tags.includes("SpellVamp")) heal += g;
+    }
+    if (HEALERS.includes(champId(p.champ))) heal += 1500;
+    fed.push([champId(p.champ), gold]);
+  }
+  fed.sort((a, b) => b[1] - a[1]);
+  const tot = ap + ad || 1, tips = [];
+  if (ap / tot >= 0.6) tips.push(["Dano mágico pesado", ANSWERS.ap]);
+  if (ad / tot >= 0.6) tips.push(["Dano físico pesado", ANSWERS.ad]);
+  if (heal >= 3500) tips.push(["Muita cura", ANSWERS.heal]);
+  const name = (id) => ITEMS[id]?.name || id;
+  const strong = fed[0] && fed[0][1] > 0 ? `<p><b>Mais forte agora:</b> ${CHAMPS[fed[0][0]]?.name || fed[0][0]} (${(fed[0][1] / 1000).toFixed(1)} mil em itens)</p>` : "";
+  el.innerHTML = `<h2>Itens que respondem ao time deles</h2>${strong}` + (tips.length
+    ? tips.map(([t, ids]) => `<p><b>${t}:</b> ${ids.filter((id) => ITEMS[id]).map(name).join(", ") || "veja os situacionais no app"}</p>`).join("")
+    : `<p>Nenhuma ameaça dominante ainda: siga a build normal.</p>`) + `<p class="note">Lido pelos itens que eles já fecharam, os mesmos do placar. Atualiza a cada 5 s.</p>`;
 }
 
 function render(list) {

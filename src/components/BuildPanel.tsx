@@ -4,7 +4,7 @@ import type { Role } from "../engine/engine";
 import { activeConditions, itemIcon, runeIcon, shardName, spellIcon, type Build, type Names } from "../lib/builds";
 import { inTauri } from "../lib/lcu";
 
-interface Props { champ: string; role: Role; build: Build | undefined; names: Names | null; enemies: string[]; flags: (n: string) => string }
+interface Props { champ: string; champKey?: number; role: Role; build: Build | undefined; names: Names | null; enemies: string[]; flags: (n: string) => string }
 
 function Item({ id, names, label }: { id: number; names: Names | null; label?: string }) {
   const name = names?.items.get(id) ?? `Item ${id}`;
@@ -16,7 +16,7 @@ function Item({ id, names, label }: { id: number; names: Names | null; label?: s
   );
 }
 
-export function BuildPanel({ champ, role, build, names, enemies, flags }: Props) {
+export function BuildPanel({ champ, champKey, role, build, names, enemies, flags }: Props) {
   const [msg, setMsg] = useState("");
   if (!build) return <p className="note">Ainda sem dados de runas e build pra {champ} nessa rota. Eles aparecem conforme a coleta junta partidas Mestre+ desse campeão.</p>;
   const r = build.runas;
@@ -35,6 +35,21 @@ export function BuildPanel({ champ, role, build, names, enemies, flags }: Props)
     }
   };
 
+  // conjunto de itens na loja do jogo: inicial, build principal, situacionais deste draft e outros comuns
+  const exportItems = async () => {
+    if (!champKey) return;
+    const it = (ids: (number | null | undefined)[]) => ids.filter((x): x is number => !!x).map((id) => ({ id: String(id), count: 1 }));
+    const blocks = [
+      { type: "Inicial", items: it([build.item_sup, 2003, 3340]) },
+      { type: `Build principal (${build.wr}%)`, items: it([...build.core, build.botas]) },
+      ...(situ.length ? [{ type: "Situacionais deste draft", items: it(situ.map((s) => s.item)) }] : []),
+      ...(build.extras?.length ? [{ type: "Outros comuns", items: it(build.extras) }] : []),
+    ].filter((b) => b.items.length);
+    setMsg("Enviando…");
+    try { await invoke("set_item_set", { title: `helporo ${champ} (${role})`, champKey, blocks }); setMsg("Conjunto de itens criado: aparece na loja dentro da partida."); }
+    catch (e) { setMsg(String(e).includes("fechado") ? "Abra o cliente do LoL pra exportar." : `Não deu pra criar os itens: ${String(e).slice(0, 120)}`); }
+  };
+
   return (
     <div className="build">
       <div className="bhead">
@@ -49,7 +64,7 @@ export function BuildPanel({ champ, role, build, names, enemies, flags }: Props)
         {[r.secundaria, ...r.perks.slice(4)].map((id, i) => rn(id) && <img key={`s${i}`} src={runeIcon(rn(id)!.icon)} title={rn(id)!.name} alt={rn(id)!.name} />)}
       </div>
       <p className="note">{rn(r.perks[0])?.name ?? ""} · {r.fragmentos.map(shardName).join(" · ")} · página com {r.wr}% em {r.jogos} jogos</p>
-      {inTauri() && <button className="ghost" onClick={exportRunes}>Exportar runas pro cliente</button>}
+      {inTauri() && <div className="brow"><button className="ghost" onClick={exportRunes}>Exportar runas pro cliente</button>{champKey && <button className="ghost" onClick={exportItems}>Exportar itens pra loja</button>}</div>}
       {msg && <p className="note">{msg}</p>}
 
       <div className="lbl">Feitiços</div>

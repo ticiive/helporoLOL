@@ -33,7 +33,9 @@ function seedRole(name: string): Role {
   return "mid";
 }
 
-export interface Game { id: number; t: number; champ: string; role: Role | null; win: boolean }
+export interface Game { id: number; t: number; champ: string; role: Role | null; win: boolean; min?: number;
+  /** estatísticas finais (cliente): abates, mortes, assistências, CS, visão, controles comprados, dano */
+  s?: { k: number; d: number; a: number; cs: number; vs: number; cw: number; dmg: number } }
 export interface ChampStat { w: number; l: number; byRole: Partial<Record<Role, { w: number; l: number }>> }
 export type Stats = Record<string, ChampStat>;
 

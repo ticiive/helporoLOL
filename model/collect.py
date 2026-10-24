@@ -2,7 +2,8 @@
 Coletor de partidas ranqueadas Mestre+ (e Diamante 1) do BR pela API oficial da Riot.
 
 Retomável: guarda o que já baixou em model/data/ e continua de onde parou.
-Respeita o limite da chave (20 req/s e 100 req/2 min na chave de desenvolvimento e na pessoal).
+Respeita o limite da chave: começa em 20 req/s e 100 req/2 min (dev e pessoal) e passa a usar
+o limite que a Riot informa em cada resposta (X-App-Rate-Limit), então uma chave maior coleta mais rápido.
 
 Uso:
   RIOT_API_KEY=... python model/collect.py --hours 5
@@ -22,17 +23,39 @@ class Riot:
 
     def __init__(self, key: str):
         self.key = key
-        self.window = []  # horários das últimas requisições (janela de 2 min)
+        self.window = []  # horários das requisições recentes
+        # limites da aplicação [(requisições, segundos)]; começa no da chave dev/pessoal e
+        # se ajusta ao que a Riot manda no cabeçalho X-App-Rate-Limit (chave de produção é maior)
+        self.limits = [(20, 1), (100, 120)]
         self.dead = False  # vira True quando a chave vence
 
     def _wait(self):
-        now = time.time()
-        self.window = [t for t in self.window if now - t < 120]
-        if len(self.window) >= 98:  # margem abaixo de 100/2min
-            time.sleep(120 - (now - self.window[0]) + 0.2)
-        if self.window and time.time() - self.window[-1] < 0.06:  # < 20/s
-            time.sleep(0.06)
+        span = max(w for _, w in self.limits)
+        while True:
+            now = time.time()
+            self.window = [t for t in self.window if now - t < span]
+            sleep = 0.0
+            for n, w in self.limits:
+                recent = [t for t in self.window if now - t < w]
+                cap = max(1, int(n * 0.95))  # margem de 5%
+                if len(recent) >= cap:
+                    sleep = max(sleep, w - (now - recent[-cap]) + 0.05)
+            if sleep <= 0:
+                break
+            time.sleep(sleep)
         self.window.append(time.time())
+
+    def _learn(self, headers):
+        h = headers.get("X-App-Rate-Limit") if headers else None
+        if not h:
+            return
+        try:
+            lim = [(int(a), int(b)) for a, b in (x.split(":") for x in h.split(","))]
+        except ValueError:
+            return
+        if lim and lim != self.limits:
+            print(f"limite da chave: {h}", flush=True)
+            self.limits = lim
 
     def get(self, url: str, params: dict | None = None):
         if params:
@@ -44,8 +67,10 @@ class Riot:
             req = urllib.request.Request(url, headers={"X-Riot-Token": self.key, "User-Agent": "helporoLOL-model"})
             try:
                 with urllib.request.urlopen(req, timeout=20) as r:
+                    self._learn(r.headers)
                     return json.loads(r.read())
             except urllib.error.HTTPError as e:
+                self._learn(e.headers)
                 if e.code == 429:
                     time.sleep(int(e.headers.get("Retry-After", "10")) + 1)
                     continue
@@ -111,7 +136,14 @@ def compact(m: dict) -> dict | None:
         perks = p.get("perks", {})
         styles = perks.get("styles", [])
         teams[p["teamId"]].append({
-            "r": pos, "c": p["championName"], "p": p["puuid"],
+            "r": pos, "c": p["championName"], "p": p["puuid"], "id": p.get("participantId", 0),
+            # estatísticas finais: base da revisão pós-jogo (comparar com a média Mestre+ do campeão)
+            "s": {"k": p.get("kills", 0), "d": p.get("deaths", 0), "a": p.get("assists", 0),
+                  "cs": p.get("totalMinionsKilled", 0) + p.get("neutralMinionsKilled", 0),
+                  "vs": p.get("visionScore", 0), "w": p.get("wardsPlaced", 0), "cw": p.get("detectorWardsPlaced", 0),
+                  "dmg": p.get("totalDamageDealtToChampions", 0), "tk": p.get("totalDamageTaken", 0),
+                  "hs": p.get("totalHealsOnTeammates", 0) + p.get("totalDamageShieldedOnTeammates", 0),
+                  "cc": p.get("timeCCingOthers", 0), "g": p.get("goldEarned", 0)},
             # itens finais, feitiços e runas: base das builds, runas e situacionais
             "it": [p.get(f"item{i}", 0) for i in range(7)],
             "sp": [p.get("summoner1Id", 0), p.get("summoner2Id", 0)],
@@ -135,6 +167,23 @@ def compact(m: dict) -> dict | None:
 
 
 MODEL_SUPS = {"Soraka", "Sona", "Nami", "Janna", "Lulu", "Milio"}
+GOLD_AT = (10, 15)  # minutos em que guarda ouro, CS e XP de cada jogador (timeline)
+
+
+def has_model_sup(row: dict) -> bool:
+    return any(p["r"] == "UTILITY" and p["c"] in MODEL_SUPS for t in row["teams"] for p in t["picks"])
+
+
+def lane_gold(tl: dict, mid: str) -> dict | None:
+    """Ouro, CS e XP de cada participante aos 10 e 15 minutos: o quanto a lane rendeu, com bem menos ruído que a vitória."""
+    frames = (tl or {}).get("info", {}).get("frames", [])
+    if len(frames) <= max(GOLD_AT):
+        return None
+    g = {}
+    for minute in GOLD_AT:
+        for pid, pf in frames[minute].get("participantFrames", {}).items():
+            g.setdefault(pid, []).extend([pf.get("totalGold", 0), pf.get("minionsKilled", 0) + pf.get("jungleMinionsKilled", 0), pf.get("xp", 0)])
+    return {"id": mid, "g": g}  # g[pid] = [ouro10, cs10, xp10, ouro15, cs15, xp15]
 
 
 def sup_mains(mf: Path, min_games: int = 5) -> set:
@@ -214,12 +263,29 @@ def main():
     state["queue"] = sorted(queue)
     save_json(DATA / "state.json", state)
 
-    # 3) baixa as partidas da fila até acabar o tempo
+    # 3) baixa as partidas da fila até acabar o tempo; nas que têm um sup do modelo, baixa também a timeline
+    gf = DATA / "gold.jsonl.gz"
+    have_gold = set()
+    if gf.exists():
+        with gzip.open(gf, "rt") as f:
+            for line in f:
+                have_gold.add(json.loads(line)["id"])
+    todo = []
+    if mf.exists():
+        with gzip.open(mf, "rt") as f:
+            for line in f:
+                r = json.loads(line)
+                if r["id"] not in have_gold and has_model_sup(r):
+                    todo.append((r["t"], r["id"]))
+    # enquanto houver timeline antiga pendente, 30% da rodada fica pra ela
+    stop3 = deadline - (0.3 * args.hours * 3600 if todo else 0)
+    print(f"timelines antigas pendentes: {len(todo)}", flush=True)
     got = 0
+    gold_out = gzip.open(gf, "at")
     with gzip.open(mf, "at") as out:
         # partidas dos mains primeiro; dentro de cada grupo, as mais recentes
         for mid in sorted(queue, key=lambda x: (x not in prio, -int(x.rsplit("_", 1)[-1]) if x.rsplit("_", 1)[-1].isdigit() else 0)):
-            if riot.dead or time.time() > deadline:
+            if riot.dead or time.time() > stop3:
                 break
             m = riot.get(f"{REGION}/lol/match/v5/matches/{mid}")
             queue.discard(mid); prio.discard(mid)
@@ -227,11 +293,30 @@ def main():
             if row:
                 out.write(json.dumps(row) + "\n")
                 got += 1
+                if has_model_sup(row) and not riot.dead:
+                    lg = lane_gold(riot.get(f"{REGION}/lol/match/v5/matches/{mid}/timeline"), mid)
+                    if lg:
+                        gold_out.write(json.dumps(lg) + "\n"); have_gold.add(mid)
             if got and got % 200 == 0:
-                out.flush()
+                out.flush(); gold_out.flush()
                 state["queue"] = sorted(queue)
                 save_json(DATA / "state.json", state)
                 print(f"partidas novas: {got} · na fila: {len(queue)}", flush=True)
+    # 4) sobrou tempo: timeline das partidas antigas com sup do modelo (mais recentes primeiro)
+    if not riot.dead and time.time() < deadline and todo:
+        filled = 0
+        for _, mid in sorted(todo, reverse=True):
+            if mid in have_gold:
+                continue
+            if riot.dead or time.time() > deadline:
+                break
+            lg = lane_gold(riot.get(f"{REGION}/lol/match/v5/matches/{mid}/timeline"), mid)
+            if lg:
+                gold_out.write(json.dumps(lg) + "\n"); have_gold.add(mid); filled += 1
+                if filled % 200 == 0:
+                    gold_out.flush(); print(f"timelines antigas: {filled}/{len(todo)}", flush=True)
+    gold_out.close()
+    print(f"partidas com ouro aos 10/15: {len(have_gold)}", flush=True)
     state["queue"] = sorted(queue); state["prio"] = sorted(prio & queue)
     save_json(DATA / "state.json", state)
     print(f"fim da rodada: {got} partidas novas, {len(seen) + got} no total, {len(queue)} na fila", flush=True)
