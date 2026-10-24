@@ -358,7 +358,7 @@ export default function App() {
           )}
           {myPick && bestCard && myPick !== bestCard.name && (
             <div className="mypick">
-              <b>Você está de {myPick}</b>{pickCard ? ` (tier ${pickCard.tier}, nota ${pickCard.score.toFixed(1)}; ${bestCard.name}: tier ${bestCard.tier}, ${bestCard.score.toFixed(1)})` : ""}. Build, runas e plano de jogo abaixo são de {myPick}.
+              <b>Você está de {myPick}</b>{pickCard ? ` (tier ${pickCard.tier}, ${pickCard.est >= 0 ? "+" : ""}${pickCard.est.toFixed(1)} pts; ${bestCard.name}: tier ${bestCard.tier}, ${bestCard.est >= 0 ? "+" : ""}${bestCard.est.toFixed(1)} pts)` : ""}. Build, runas e plano de jogo abaixo são de {myPick}.
               {pickCard && <div className="chips">{pickCard.tags.filter((t) => t.kind !== "info").map((t) => <span key={t.t} className={`chip ${t.kind === "good" ? "good" : "bad"}`}>{t.t}</span>)}</div>}
             </div>
           )}

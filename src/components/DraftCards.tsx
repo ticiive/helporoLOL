@@ -19,9 +19,10 @@ export function ChampCard({ c, cat, big, onPick }: { c: Card; cat: Catalog; big?
     <div className={`ccard ${big ? "big" : ""}`} style={{ ["--tc" as string]: TIER_COLOR[c.tier] }} onClick={() => onPick?.(c.name)} role={onPick ? "button" : undefined}>
       <div className="chead">
         <Icon cat={cat} champ={cat.byName.get(norm(c.name)) ?? null} size={big ? 64 : 48} ring={TIER_COLOR[c.tier]} />
-        <div className="cn"><b>{c.name}</b><small>nota {c.score > 0 ? "+" : ""}{c.score.toFixed(1)}</small></div>
+        <div className="cn"><b>{c.name}</b><small title="Estimativa do backtest: quanto essa escolha muda a chance de vitória em relação a um pick médio nesse draft">{c.est >= 0 ? "+" : ""}{c.est.toFixed(1)} pts de winrate vs pick médio</small></div>
         <span className="tier">{c.tier}</span>
       </div>
+      <p className="cwhy">{c.why}</p>
       <Bar label="Matchup" v={c.bars.matchup} />
       <Bar label="Sinergia" v={c.bars.synergy} />
       <Bar label="Comp" v={c.bars.comp} />

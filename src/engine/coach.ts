@@ -41,13 +41,13 @@ export function coach(o: { role: Role; me: string | null; ally: Team; enemy: Tea
   const lvl2A = isBot ? [me, ally.adc, ally.sup].filter((c): c is string => !!c && LVL2.has(c)) : [];
   if (isBot && lvl2E.length) lane.push({ prio: 9, kind: "avoid", t: `Nível 2 deles é forte (${list(lvl2E)}). O 2 chega com a primeira wave + 1 minion melee da segunda (7 minions): se eles chegarem antes, recue pra trás da wave na hora.` });
   else if (isBot && lvl2A.length) lane.push({ prio: 7, kind: "do", t: `O nível 2 de vocês é forte (${list([...new Set(lvl2A)])}): ajude a empurrar a primeira wave e entre assim que chegar, antes deles.` });
-  for (const c of opp) {
+  for (const c of role === "jg" ? [] : opp) {
     const th = threatOf(c); if (!th) continue;
     const cd = cd1(c, th.key);
     if (th.type === "hook") lane.push({ prio: 10, kind: "avoid", t: `${c}: fique atrás dos minions, fora da linha do ${th.ability}${cd ? ` (recarga de ${cd}s no nível 1)` : ""}. Quando ele errar, é a sua janela de troca.` });
     else if (th.type === "engage") lane.push({ prio: 9, kind: "avoid", t: `${c} entra com ${th.ability}: não fique na frente da wave quando ele estiver perto${myDef ? `; guarde o seu ${myDef}: ${def!.use}` : ""}.` });
     else if (th.type === "cc" || th.type === "pick") lane.push({ prio: 7, kind: "avoid", t: `${c} prende com ${th.ability}${cd ? ` (${cd}s no nível 1)` : ""}: ande de lado e use os minions de escudo; depois que gastar, vocês trocam.` });
-    else if (th.type === "dive") lane.push({ prio: 6, kind: "avoid", t: `${c} mergulha (${th.ability}): fique perto do seu ${role === "sup" ? "ADC" : "sup"} pra responderem juntos.` });
+    else if (th.type === "dive") lane.push({ prio: 6, kind: "avoid", t: isBot ? `${c} mergulha (${th.ability}): fique perto do seu ${role === "sup" ? "ADC" : "sup"} pra responderem juntos.` : `${c} mergulha (${th.ability}): quando ele tiver o ${th.key}, jogue perto da torre e com visão.` });
   }
   if (isBot && opp.some((c) => /[KL]/.test(flags(c))) && !opp.some((c) => THREAT[c]?.type === "hook" || THREAT[c]?.type === "engage"))
     lane.push({ prio: 6, kind: "avoid", t: `Bot deles é de poke (${list(opp)}): não fique parada no alcance e não gaste sustain antes deles errarem as skills.` });
@@ -76,7 +76,12 @@ export function coach(o: { role: Role; me: string | null; ally: Team; enemy: Tea
   if (role === "adc") lane.push({ prio: 6, kind: "do", t: "Farme sem passar do meio da lane quando o jungle deles não aparecer no mapa; empurre só com visão." });
   if (role === "mid") lane.push({ prio: 6, kind: "do", t: "Empurre a wave antes de rotacionar: o primeiro dragão nasce aos 5:00 e as vastilarvas aos 8:00." });
   if (role === "top") lane.push({ prio: 6, kind: "do", t: "Vastilarvas aos 8:00 do seu lado: tenha a wave empurrada perto disso pra ajudar o jungle." });
-  if (role === "jg") lane.push({ prio: 6, kind: "do", t: `Scuttle nasce aos ${mmss(T.scuttle)}: só disputa com prioridade das rotas do lado.` });
+  if (role === "jg") {
+    lane.push({ prio: 6, kind: "do", t: `Scuttle nasce aos ${mmss(T.scuttle)}: só disputa com prioridade das rotas do lado.` });
+    if (ej) { const th = threatOf(ej); lane.push({ prio: 7, kind: EARLY_JG.has(ej) ? "avoid" : "do", t: EARLY_JG.has(ej) ? `${ej} é forte cedo${th ? ` (${th.ability})` : ""}: não divida a selva sem prioridade das rotas e espere ele aparecer pra fazer o lado oposto.` : `${ej} costuma farmar: dá pra gankar cedo ou invadir com prioridade das rotas.` }); }
+    const gankable = (["top", "mid", "adc", "sup"] as Role[]).map((r) => enemy[r]).filter((c): c is string => !!c && !/[XDS]/.test(flags(c)) && !/N/.test(flags(c)));
+    if (gankable.length) lane.push({ prio: 5, kind: "do", t: `Alvos de gank sem fuga: ${list(gankable.slice(0, 3))}. Gank com a wave do lado deles e com CC do aliado.` });
+  }
   timeline.push(
     { at: 2 * 60 + 40, t: `Scuttle aos ${mmss(T.scuttle)}: ward no rio do lado do seu jungle.` },
     { at: T.drake - 75, t: "Dragão nasce aos 5:00: empurre a wave, ward de controle no rio/pit e chegue antes." },

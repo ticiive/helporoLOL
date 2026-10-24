@@ -240,3 +240,4 @@ details summary { cursor: pointer; }
 .tabs button { background: transparent; border: 1px solid var(--line); color: var(--muted); border-radius: 8px; padding: 7px 14px; font: inherit; font-weight: 600; cursor: pointer; }
 .tabs button[aria-selected=true] { background: var(--gold); color: #111; border-color: var(--gold); }
 .tabs .badge { margin-left: 6px; font-size: 11px; background: var(--bad); color: #fff; border-radius: 10px; padding: 1px 6px; }
+.ccard .cwhy { margin: 0; font-size: 12.5px; color: var(--fg); line-height: 1.4; }

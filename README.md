@@ -2,40 +2,59 @@
 
 Assistente de draft (meu próprio Porofessor). Lê a seleção de campeões e o meu histórico de partidas direto do cliente do LoL e sugere o pick explicando a nota: no sup, com dados de matchup de Soraka, Sona, Nami, Janna, Lulu e Milio; no fill, pelos campeões que eu já joguei naquela rota.
 
-## Como a sugestão é calculada
+## O que o app faz
 
-Cada sup recebe uma nota pela soma de sete fatores, cada um com peso ajustável no app:
+O app tem quatro abas.
 
-| Fator | O que mede |
+- **Draft:** lê a seleção do cliente e sugere bans, picks e runas.
+  - **Recomendação em cards, só por dados.** Cada campeão da rota ganha um tier (S a D) naquele draft, três barras (Matchup, Sinergia e Comp) e tags como "Bom contra Senna", "Fraco contra Lux (ADC)", "Bom com Caitlyn", "Responde ao CC deles" e "Seguro de blind".
+  - Aparecem o melhor do seu pool e, sempre, opções de fora do pool em tier S. O botão "+ Criar pool" monta o pool por rota.
+  - **Sugestão de ban e risco do blind**, considerando quem já foi banido.
+  - **Runas, feitiços e itens do Mestre+ BR**, com exportação pro cliente: a página de runas e o conjunto de itens da loja.
+- **Coach:** o plano da partida.
+  - A condição de vitória, a força do time por minuto e dicas da fase de rotas, do meio e do fim do jogo, específicas do draft.
+  - As dicas falam da habilidade que pesa de cada inimigo, com o nome em português e a recarga no nível 1 ("respeite o E (Encanto) de Ahri"), do gank do jungle inimigo, dos níveis 2 e 6, da visão e do roam.
+  - Usa os tempos da temporada 2026: minions 0:30, campos 0:55, scuttle 2:55, dragão 5:00, vastilarvas 8:00, Arauto 15:00 e Barão 20:00.
+- **Ao vivo** (celular ou Mac, no endereço que o app mostra no topo):
+  - As dicas da fase em que a partida está e a próxima coisa da linha do tempo, com contagem regressiva.
+  - Os timers de objetivo, pelos eventos da partida.
+  - O próximo item da build e quanto falta de ouro.
+  - Os timers manuais de feitiço e ult, que você toca quando vê.
+- **Pós-jogo:** lê a timeline das suas partidas no cliente.
+  - Onde e como cada morte aconteceu: zona do mapa, quem matou, se tinha aliado perto e se foi antes de objetivo.
+  - O ouro da lane aos 10 e aos 15, as wards (de controle, limpas e antes de cada objetivo) e a comparação com a média Mestre+ do campeão.
+  - Um "Treine isto" com o padrão das suas últimas 10 partidas e o replay do minimapa.
+
+## Como a recomendação é calculada (e testada)
+
+A nota de cada campeão tem quatro partes:
+
+| Parte | De onde vem |
 |---|---|
-| Lane | O 2v2 contra o sup inimigo (minha leitura dos kits, que eu corrijo no app) e o ADC inimigo agressivo ou de poke |
-| Dados | Winrate de jogo contra o sup inimigo (Lolalytics), puxado pro 50% quando a amostra é pequena |
-| Comp | Ameaças do time inimigo (dive, assassinos, hooks, poke, AoE) e o que falta no meu time (frontline, engage, dano mágico) |
-| Seu ADC | Sinergia com hipercarry ou ADC de lane agressiva |
-| Meta | Tier e winrate da patch |
-| Você | Meu histórico com o campeão naquela rota (winrate puxado pro 50% com poucos jogos + conforto pelo volume), lido do cliente e atualizado sozinho; ★ dá bônus pra quem eu quero treinar |
-| Blind | Penalidade quando o bot inimigo ainda não apareceu, proporcional a quantos counters fortes cada sup tem |
+| Matchup | Contra o oponente da rota. No sup, é sup contra sup (coleta Mestre+/D1 BR junto com o op.gg) e contra o ADC inimigo (coleta). Cada confronto é centrado na média dos candidatos, então só conta quem vai melhor que os outros. |
+| Sinergia | Com o parceiro (sup e ADC, mid ou top e jungle). |
+| Comp | O que falta no seu time e o que o time inimigo exige (CC em cadeia, dive, tanques, escalar junto). |
+| Meta | Winrate no Mestre+/D1 BR. |
 
-Lane e Dados são separados de propósito: Soraka tem 52% de winrate de jogo contra Nautilus, mas a lane é muito difícil.
+Os pesos (matchup 1, sinergia 0,8, comp 0,4, meta 1,4) foram calibrados num teste com cerca de 24 mil escolhas reais de sup que o cálculo não viu: os dados de lane vêm das partidas mais antigas, e o teste usa as 20% mais recentes. Nesse teste, o tier S ganhou 51,4% e o tier D, 46,3%. Pra repetir o teste: `bash model/backtest/run.sh`.
 
-## Timer manual (Mac ou celular)
-
-Com o helporoLOL aberto no PC, abra no Mac ou no celular (mesma rede Wi-Fi) o endereço que aparece no topo do app, tipo `http://192.168.0.10:7777`. Na primeira vez o Windows pergunta se libera o acesso na rede: aceite em **redes privadas**.
-
-A página mostra os inimigos da partida com três quadrados: ult e os dois feitiços. Os campeões, os feitiços e o tempo de partida vêm da API local da partida; os timers são manuais: você toca quando vê o feitiço sendo usado, e embaixo aparece o horário da partida em que ele volta, pra mandar no chat. Feitiços com tempo base; ult com o nível atual e uma aceleração média estimada pelo tempo de jogo (sem ler item nem runa). Pra testar fora de partida: `http://IP:7777/?demo`.
+O ranking antigo (com a regra da main, o histórico pessoal e os pesos ajustáveis) continua no app, recolhido em "Ranking detalhado".
 
 ## Estrutura
 
 ```
-src/engine/champions.ts   características de cada campeão (flags)
-src/engine/data.ts        snapshot do Lolalytics + tabela de lane
-src/engine/engine.ts      motor de decisão (pesos ficam no topo do arquivo)
-src/lib/ddragon.ts        ícones e lista de campeões (Data Dragon, CDN oficial da Riot)
-src/lib/lcu.ts            converte a sessão do cliente em draft e lê o histórico
-src/lib/stats.ts          base da temporada + partidas guardadas por conta
-src-tauri/src/lcu.rs      lê a API local do cliente (porta e senha do processo ou do lockfile)
-src-tauri/src/live.rs     serve a página do timer na rede de casa (porta 7777)
-src-tauri/assets/timer.html  a página do timer
+src/engine/draftScore.ts  recomendação por dados (cards, tier, tags, pesos do backtest)
+src/engine/coach.ts       dicas por fase; coachData.ts = habilidades que pesam, tempos 2026, defesas dos sups
+src/engine/gameplan.ts    curva de força por duração, foco, lutas, pick e split
+src/engine/lanedata.ts    lane do sup (coleta Mestre+ BR): contra sup, contra ADC, com ADC, blind e ban
+src/engine/botlane.ts     tabelas do op.gg (sup x sup, ADC + sup)
+src/engine/engine.ts      ranking antigo (regra da main, histórico pessoal)
+src/lib/review.ts         revisão pós-jogo pela timeline do cliente
+src/lib/spells.ts         nomes e recargas das habilidades (Data Dragon, pt_BR)
+src/lib/lcu.ts            seleção, histórico e partidas pela API local do cliente
+src-tauri/src/lcu.rs      API local do cliente (seleção, runas, itens, partidas e timelines)
+src-tauri/src/live.rs     página ao vivo na rede de casa (porta 7777): /players, /events, /coach
+model/                    coleta (Riot API), treino, builds, lane, scaling, médias e backtest
 ```
 
 ## Como baixar e instalar (Windows)

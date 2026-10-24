@@ -20,6 +20,8 @@ export interface Card {
   bars: { matchup: number; synergy: number; comp: number }; // 0-100
   pts: { matchup: number; synergy: number; comp: number; meta: number };
   tags: Tag[]; inPool: boolean; games: number;
+  /** o porquê em uma frase e a estimativa de pontos de winrate vs um pick médio (backtest) */
+  why: string; est: number;
 }
 const ROLE_SET: Record<Role, Set<string>> = { top: TOPS, jg: JUNGLERS, mid: MIDS, adc: BOTS, sup: SUPPORTS };
 const shrink = (d: number, n: number, k: number) => (d * n) / (n + k);
@@ -131,7 +133,15 @@ export function draftCards(o: {
     // pesos calibrados em ~24 mil escolhas de sup que o cálculo não viu (regressão logística, out/backtest):
     // meta e matchup são os que mais preveem vitória; as regras de comp quase nada.
     const score = W.matchup * mu + W.synergy * sy + W.comp * cp + W.meta * meta;
-    cards.push({ name, tier: "C", score, bars: { matchup: bar(mu), synergy: bar(sy), comp: bar(cp) }, pts: { matchup: mu, synergy: sy, comp: cp, meta }, tags, inPool, games });
+    const parts: [number, string][] = [
+      [W.meta * meta, meta > 0 ? "forte no meta" : "fraco no meta"],
+      [W.matchup * mu, mu > 0 ? (E.sup || opp ? `vai melhor que os outros contra ${role === "sup" ? E.sup ?? "o sup deles" : opp}` : "seguro de blind") : `sofre contra ${role === "sup" ? (E.sup ?? ea ?? "eles") : opp ?? "eles"}`],
+      [W.synergy * sy, sy > 0 ? `combina com ${partner}` : `não combina com ${partner}`],
+      [W.comp * cp, cp > 0 ? "cobre o que o seu time precisa" : "não cobre o que o time precisa"],
+    ];
+    const top2 = parts.filter(([v]) => Math.abs(v) >= 0.3).sort((a, b) => Math.abs(b[0]) - Math.abs(a[0])).slice(0, 2).map(([, t]) => t);
+    const why = top2.length ? top2.join(" e ").replace(/^./, (c) => c.toUpperCase()) + "." : "Sem nada que destaque nesse draft.";
+    cards.push({ name, tier: "C", score, why, est: Math.max(-6, Math.min(6, score * 0.76)), bars: { matchup: bar(mu), synergy: bar(sy), comp: bar(cp) }, pts: { matchup: mu, synergy: sy, comp: cp, meta }, tags, inPool, games });
   }
   cards.sort((a, b) => b.score - a.score);
   // tier relativo aos campeões da rota neste draft
