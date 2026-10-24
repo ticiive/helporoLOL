@@ -355,7 +355,7 @@ export default function App() {
       <datalist id="champ-list">{cat.list.map((c) => <option key={c.name} value={c.name} />)}</datalist>
 
       <GamePlanPanel plan={plan} />
-      <PostGame games={games} bench={bench} />
+      <PostGame games={games} bench={bench} cat={cat} gameName={account?.gameName} />
 
       <section className="comps">
         <ProfileCard title="Perfil do meu time" p={profile(allies, flags)} side="a" />

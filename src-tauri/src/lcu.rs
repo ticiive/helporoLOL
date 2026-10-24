@@ -121,6 +121,18 @@ pub async fn match_history(beg: u32, end: u32) -> Result<Option<serde_json::Valu
     Ok(get(&path).await?.and_then(|r| r.ok()))
 }
 
+/// Partida completa (os 10 jogadores e as estatísticas) e a timeline dela (posições a cada minuto e
+/// cada abate com coordenada), pela API local do cliente: base da revisão pós-jogo e do replay do minimapa.
+#[tauri::command]
+pub async fn match_game(game_id: u64) -> Result<Option<serde_json::Value>, String> {
+    Ok(get(&format!("/lol-match-history/v1/games/{game_id}")).await?.and_then(|r| r.ok()))
+}
+
+#[tauri::command]
+pub async fn match_timeline(game_id: u64) -> Result<Option<serde_json::Value>, String> {
+    Ok(get(&format!("/lol-match-history/v1/game-timelines/{game_id}")).await?.and_then(|r| r.ok()))
+}
+
 /// Fase do cliente: "ChampSelect", "InProgress" (em partida), "Lobby", "None"...
 #[tauri::command]
 pub async fn gameflow_phase() -> Result<Option<String>, String> {
