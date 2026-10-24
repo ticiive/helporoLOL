@@ -16,6 +16,8 @@ from train import display
 ROOT = Path(__file__).parent
 DATA = Path(os.environ.get("HELPORO_DATA", ROOT / "data"))
 OUT = Path(os.environ.get("HELPORO_OUT", ROOT / "out"))
+# só partidas antes desse horário (ms): usado pra validar em jogos que o cálculo não viu
+UNTIL = int(os.environ.get("HELPORO_UNTIL", "0") or 0)
 BINS = [0, 22, 26, 30, 34, 99]
 K = 150  # jogos "virtuais" no winrate geral, por faixa
 
@@ -25,6 +27,8 @@ def main():
     with gzip.open(DATA / "matches.jsonl.gz", "rt") as f:
         for line in f:
             m = json.loads(line)
+            if UNTIL and m["t"] >= UNTIL:
+                continue
             d = m["d"] / 60
             b = next(i for i in range(len(BINS) - 1) if BINS[i] <= d < BINS[i + 1])
             for t in m["teams"]:

@@ -22,8 +22,10 @@ export function BuildPanel({ champ, champKey, role, build, names, enemies, flags
   const r = build.runas;
   const rn = (id: number) => names?.runes.get(id);
   const active = activeConditions(enemies, flags);
-  const situ = build.situacionais.filter((s) => active.has(s.cond));
-  const other = build.situacionais.filter((s) => !active.has(s.cond)).slice(0, 3);
+  // situacionais com pouca amostra são ruído (dados antigos tinham itens com 13 jogos)
+  const solid = build.situacionais.filter((s) => s.jogos >= 40);
+  const situ = solid.filter((s) => active.has(s.cond));
+  const other = solid.filter((s) => !active.has(s.cond)).slice(0, 3);
 
   const exportRunes = async () => {
     setMsg("Enviando…");

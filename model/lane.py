@@ -16,6 +16,8 @@ from train import display
 ROOT = Path(__file__).parent
 DATA = Path(os.environ.get("HELPORO_DATA", ROOT / "data"))
 OUT = Path(os.environ.get("HELPORO_OUT", ROOT / "out"))
+# só partidas antes desse horário (ms): usado pra validar em jogos que o cálculo não viu
+UNTIL = int(os.environ.get("HELPORO_UNTIL", "0") or 0)
 K_GOLD, K_WR = 30, 60  # jogos "virtuais" puxando pra média do sup
 
 
@@ -39,6 +41,8 @@ def main():
     with gzip.open(DATA / "matches.jsonl.gz", "rt") as f:
         for line in f:
             m = json.loads(line)
+            if UNTIL and m["t"] >= UNTIL:
+                continue
             g = gold.get(m["id"])
             h = hash(m["id"]) & 1
             for ti, team in enumerate(m["teams"]):

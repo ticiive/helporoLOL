@@ -1,7 +1,9 @@
 import { bestWith } from "./engine/botlane";
 import { bestVsAdc, bestVsSup, blindDanger, setLaneData, supBans } from "./engine/lanedata";
 import { gamePlan, type Scaling } from "./engine/gameplan";
-import { GamePlanPanel } from "./components/GamePlanPanel";
+import { CoachPanel } from "./components/CoachPanel";
+import { coach as buildCoach } from "./engine/coach";
+import { loadKits, type Kit } from "./lib/spells";
 import { PostGame } from "./components/PostGame";
 import { DraftCards, PoolEditor } from "./components/DraftCards";
 import { draftCards } from "./engine/draftScore";
@@ -186,6 +188,14 @@ export default function App() {
   }, [myRole, settings.main, settings.mainAvoid, gone.join(","), myPick, top?.name, counters, laneVer]);
   const blindInfo = myRole === "sup" && !draft.enemy.sup ? blindDanger(settings.main, settings.mainAvoid, gone) : null;
   const plan = useMemo(() => { try { return gamePlan({ ...draft.ally, [myRole]: shown }, draft.enemy, myRole, flags, scaling); } catch { return null; } }, [draft, myRole, shown, flags, scaling]);
+  // nomes e recargas das habilidades (Data Dragon) dos 10 campeões, pro coach falar "E (Encanto) da Ahri"
+  const [kits, setKits] = useState<Map<string, Kit>>(new Map());
+  const kitKey = [...ROLES.map((r) => draft.ally[r]), ...ROLES.map((r) => draft.enemy[r]), shown].filter(Boolean).join(",");
+  useEffect(() => { if (kitKey) loadKits(cat, kitKey.split(",")).then(setKits).catch(() => {}); }, [kitKey, cat]);
+  const coach = useMemo(() => { try { return buildCoach({ role: myRole, me: shown, ally: { ...draft.ally, [myRole]: shown }, enemy: draft.enemy, flags, scaling, kits }); } catch { return null; } }, [myRole, shown, draft, flags, scaling, kits, laneVer]);
+  // abas: na partida abre o coach; quando acaba, o pós-jogo
+  const [tab, setTab] = useState<"draft" | "coach" | "pos" | "config">("draft");
+  useEffect(() => { if (phase === "InProgress") setTab("coach"); else if (phase === "EndOfGame") setTab("pos"); else if (phase === "ChampSelect") setTab("draft"); }, [phase]);
   const skipBot = new Set([...ROLES.map((r) => draft.ally[r]), ...ROLES.map((r) => draft.enemy[r]), ...draft.bans, ...(settings.exclude?.sup ?? [])].filter(Boolean) as string[]);
   const poolTag = (n: string) => { const c = stats[n]?.byRole.sup; const g = c ? c.w + c.l : 0; return g >= 20 ? `main seu (${g} jogos)` : g >= 3 || settings.pool.sup.includes(n) ? "no seu pool" : "fora do seu pool"; };
   // opções sinalizadas: um counter do oponente direto e uma sinergia com o parceiro, sempre
@@ -246,6 +256,12 @@ export default function App() {
           {myRole === "sup" ? " Precisa de resposta a CC: Morgana (escudo bloqueia o CC), Milio (ult tira o CC), Braum (bloqueia projétil). Item: Bênção de Mikael." : " Jogue de trás da sua frontline e considere Botas de Mercúrio ou Faixa/QSS."}
         </div>
       )}
+      <nav className="tabs" role="tablist" aria-label="Seções">
+        {([["draft", "Draft"], ["coach", "Coach"], ["pos", "Pós-jogo"], ["config", "Pool e ajustes"]] as const).map(([k, l]) => (
+          <button key={k} role="tab" aria-selected={tab === k} onClick={() => setTab(k)}>{l}{k === "coach" && phase === "InProgress" ? <span className="badge">ao vivo</span> : null}</button>
+        ))}
+      </nav>
+      {tab === "draft" && (<>
       <div className="roles" role="group" aria-label="Sua rota">
         <span className="lbl">Sua rota</span>
         {ROLES.map((r) => (
@@ -295,6 +311,7 @@ export default function App() {
             <ResultPanel results={results} risk={risk} enemySup={myRole === "sup" ? draft.enemy.sup : null} myAdc={myRole === "sup" ? draft.ally.adc : null} enemyAdc={myRole === "sup" ? draft.enemy.adc : null} settings={settings} cat={cat} onLane={setLane} />
           </details>
           {myRole === "sup" ? (
+          <details className="oldrank"><summary className="note">Mais opções da botlane (listas por matchup)</summary>
           <div className="specials bot">
             {([["counter", draft.enemy.sup, `Contra ${draft.enemy.sup ?? "o sup inimigo"} · Mestre+ BR e op.gg`, draft.enemy.sup ? bestVsSup(draft.enemy.sup, skipBot, 4).map((x) => ({ name: x.name, txt: `${x.wr.toFixed(1)}% · ${Math.round(x.n).toLocaleString("pt-BR")}j` })) : []],
                ["counter", draft.enemy.adc, `Contra ${draft.enemy.adc ?? "o ADC inimigo"} (ADC) · Mestre+ BR`, draft.enemy.adc ? bestVsAdc(draft.enemy.adc, skipBot, 4).map((x) => ({ name: x.name, txt: `${x.wr.toFixed(1)}%${x.gd !== null ? ` · ${x.gd >= 0 ? "+" : ""}${x.gd} ouro aos 15` : ""} · ${x.n}j` })) : []],
@@ -313,6 +330,7 @@ export default function App() {
               </div>
             ))}
           </div>
+          </details>
           ) : (
           <div className="specials">
             {([["counter", special.counter, special.opp ? `vs ${special.opp}` : "aparece quando o oponente da sua rota for revelado"],
@@ -361,17 +379,20 @@ export default function App() {
           </div>
         </div>
       </section>
+      </>)}
       <datalist id="champ-list">{cat.list.map((c) => <option key={c.name} value={c.name} />)}</datalist>
 
-      <GamePlanPanel plan={plan} />
-      <PostGame games={games} bench={bench} cat={cat} gameName={account?.gameName} />
+      {tab === "coach" && (<>
+        <CoachPanel coach={coach} plan={plan} cat={cat} champ={shown} />
+        <section className="comps">
+          <ProfileCard title="Perfil do meu time" p={profile(allies, flags)} side="a" />
+          <ProfileCard title="Perfil do inimigo" p={profile(enemies, flags)} side="e" />
+        </section>
+        {timerUrl && <p className="note">No celular ou no Mac (mesmo Wi-Fi): <code>{timerUrl}</code> mostra este coach ao vivo, os timers de objetivo e os timers manuais.</p>}
+      </>)}
+      {tab === "pos" && <PostGame games={games} bench={bench} cat={cat} gameName={account?.gameName} />}
 
-      <section className="comps">
-        <ProfileCard title="Perfil do meu time" p={profile(allies, flags)} side="a" />
-        <ProfileCard title="Perfil do inimigo" p={profile(enemies, flags)} side="e" />
-      </section>
-
-      <section className="settings">
+      {tab === "config" && <section className="settings">
         <div className="sect">
           <h2>Pool de {RN[myRole]}</h2>
           <div className="poolgrid">
@@ -470,7 +491,7 @@ export default function App() {
           <p className="note">Matchups e meta de sup: Lolalytics, patch {PATCH}, Esmeralda+. Ícones: Data Dragon {cat.version || "(offline)"}.{catErr ? " Sem internet: usando iniciais." : ""}</p>
           <p className="note">Correções de lane salvas: {Object.keys(settings.lane).length}. {Object.keys(settings.lane).length > 0 && <button className="link" onClick={() => setSettings((s) => ({ ...s, lane: {} }))}>apagar</button>}</p>
         </div>
-      </section>
+      </section>}
     </div>
   );
 }

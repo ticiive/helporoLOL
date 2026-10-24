@@ -23,6 +23,8 @@ export interface Card {
 }
 const ROLE_SET: Record<Role, Set<string>> = { top: TOPS, jg: JUNGLERS, mid: MIDS, adc: BOTS, sup: SUPPORTS };
 const shrink = (d: number, n: number, k: number) => (d * n) / (n + k);
+/** Peso de cada parte da nota (backtest de 24 mil escolhas: matchup 1, sinergia 0,8, comp 0,4, meta 1,4). */
+export const W = { matchup: 1, synergy: 0.8, comp: 0.4, meta: 1.4 };
 const bar = (p: number) => Math.max(5, Math.min(95, Math.round(50 + p * 12)));
 
 export function draftCards(o: {
@@ -126,7 +128,9 @@ export function draftCards(o: {
       const bl = enemies.filter((e) => o.mainAvoid!.some((a) => norm(a) === norm(e)));
       if (bl.length) tags.push({ kind: "bad", t: `Sua regra: não joga contra ${bl.join(", ")}` });
     }
-    const score = mu + 0.8 * sy + cp + 0.6 * meta;
+    // pesos calibrados em ~24 mil escolhas de sup que o cálculo não viu (regressão logística, out/backtest):
+    // meta e matchup são os que mais preveem vitória; as regras de comp quase nada.
+    const score = W.matchup * mu + W.synergy * sy + W.comp * cp + W.meta * meta;
     cards.push({ name, tier: "C", score, bars: { matchup: bar(mu), synergy: bar(sy), comp: bar(cp) }, pts: { matchup: mu, synergy: sy, comp: cp, meta }, tags, inPool, games });
   }
   cards.sort((a, b) => b.score - a.score);

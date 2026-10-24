@@ -102,10 +102,12 @@ def main(min_games=40, min_counter=15):
                     continue
                 with_i = [w for s, w in cg if item in s]
                 without = [w for s, w in cg if item not in s]
-                if len(with_i) < 12 or len(without) < 12:
+                if len(with_i) < 40 or len(without) < 40:
                     continue
-                delta = 100 * (sum(with_i) / len(with_i) - sum(without) / len(without))
-                if delta >= 3:
+                # puxa pro zero com amostra pequena: 15 jogos com +25 pts é ruído, não item situacional
+                n = min(len(with_i), len(without))
+                delta = 100 * (sum(with_i) / len(with_i) - sum(without) / len(without)) * n / (n + 80)
+                if delta >= 2:
                     situ.append({"item": item, "cond": cond, "quando": text, "wr": wr(sum(with_i), len(with_i)), "jogos": len(with_i), "ganho": round(delta, 1)})
         situ.sort(key=lambda x: -x["ganho"])
         builds[role][champ] = {
