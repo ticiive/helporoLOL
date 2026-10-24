@@ -16,6 +16,7 @@ export interface Review {
   k: number; d: number; a: number; kp: number; teamKills: number;
   players: Player[]; frames: Record<number, Pos>[]; kills: Kill[]; objs: Obj[];
   deaths: Death[]; good: string[]; bad: string[];
+  lane: { gd10: number | null; gd15: number | null }; vision: { wards: number; control: number; clears: number; noSetup: number; objectives: number };
   focus: { key: FocusKey; title: string; text: string } | null;
   story: string;
 }
@@ -61,12 +62,13 @@ export function analyze(game: any, tl: any, cat: Catalog, me: { gameName?: strin
 
   // posições a cada minuto e eventos
   const frames: Record<number, Pos>[] = tl.frames.map((f: any) => Object.fromEntries(Object.entries(f.participantFrames ?? {}).map(([k, v]: [string, any]) => [+k, { x: v.position?.x ?? 0, y: v.position?.y ?? 0 }])));
-  const kills: Kill[] = [], objs: Obj[] = [], myWards: number[] = [];
+  const kills: Kill[] = [], objs: Obj[] = [], myWards: number[] = [], myControl: number[] = [], myClears: number[] = [];
   for (const f of tl.frames) for (const e of f.events ?? []) {
     const t = (e.timestamp ?? 0) / 1000;
     if (e.type === "CHAMPION_KILL") kills.push({ t, killer: e.killerId, victim: e.victimId, assists: e.assistingParticipantIds ?? [], pos: e.position ?? { x: 0, y: 0 } });
     else if (e.type === "ELITE_MONSTER_KILL") objs.push({ t, type: e.monsterType, team: parts.find((p) => p.participantId === e.killerId)?.teamId ?? 0 });
-    else if (e.type === "WARD_PLACED" && e.creatorId === idMe) myWards.push(t);
+    else if (e.type === "WARD_PLACED" && e.creatorId === idMe) { myWards.push(t); if (/CONTROL/.test(e.wardType ?? "")) myControl.push(t); }
+    else if (e.type === "WARD_KILL" && e.killerId === idMe) myClears.push(t);
   }
   const posAt = (pid: number, t: number): Pos | null => {
     const i = Math.floor(t / 60), a = frames[i]?.[pid], b = frames[i + 1]?.[pid];
@@ -91,6 +93,25 @@ export function analyze(game: any, tl: any, cat: Catalog, me: { gameName?: strin
       isolated: near === 0 && x.killer > 0, objective: o ? OBJ[o.type] ?? o.type : null, early: x.t < 14 * 60 };
   });
 
+  // lane: ouro da sua dupla (ou seu, fora do bot) contra o adversário direto aos 10 e 15 min
+  const gold = (pid: number, min: number) => { const f = tl.frames[min]?.participantFrames?.[pid]; return f && typeof f.totalGold === "number" ? f.totalGold : null; };
+  const lvl = (pid: number, min: number) => tl.frames[min]?.participantFrames?.[pid]?.level ?? null;
+  const posOf = (p: any) => (p.timeline?.lane ?? "") + (p.timeline?.role ?? "");
+  const botLane = (team: number) => parts.filter((p) => p.teamId === team && /BOTTOM|DUO/.test(posOf(p))).map((p) => p.participantId);
+  const myDuo = role === "sup" || role === "adc" ? botLane(myTeam) : [idMe];
+  const theirDuo = role === "sup" || role === "adc" ? botLane(myTeam === 100 ? 200 : 100) : parts.filter((p) => p.teamId !== myTeam && posOf(p) === posOf(mine)).map((p) => p.participantId);
+  const laneDiff = (min: number) => {
+    if (!myDuo.length || !theirDuo.length || myDuo.length !== theirDuo.length) return null;
+    const a = myDuo.map((pid) => gold(pid, min)), b = theirDuo.map((pid) => gold(pid, min));
+    if (a.some((x) => x === null) || b.some((x) => x === null)) return null;
+    return (a as number[]).reduce((x, y) => x + y, 0) - (b as number[]).reduce((x, y) => x + y, 0);
+  };
+  const gd10 = laneDiff(10), gd15 = laneDiff(15);
+  const oppLvl = theirDuo.length ? lvl(theirDuo[0], 10) : null, myLvl10 = lvl(idMe, 10);
+  // visão perto de objetivo: wards nos 90 s antes de cada dragão/arauto/barão
+  const objSetup = objs.map((ob) => ({ ob, wards: myWards.filter((w) => w < ob.t && ob.t - w <= 90).length }));
+  const noSetup = objSetup.filter((x) => x.wards === 0);
+
   // pontos fortes e fracos
   const good: string[] = [], bad: string[] = [];
   const ref = role && bench ? (bench[role]?.[mine ? nameOf(idMe) : ""] as any) : undefined;
@@ -98,12 +119,21 @@ export function analyze(game: any, tl: any, cat: Catalog, me: { gameName?: strin
   else if (kp < 0.4 && teamKills >= 10) bad.push(`participação de abates baixa (${Math.round(kp * 100)}% de KP): o time lutou sem você em boa parte das lutas`);
   const vsMin = (st.visionScore ?? 0) / min;
   if (ref?.vs) { if (vsMin >= ref.vs[0] * 1.1) good.push(`visão acima da média Mestre+ (${vsMin.toFixed(2)}/min vs ${ref.vs[0].toFixed(2)})`); else if (vsMin < ref.vs[0] * 0.85) bad.push(`visão abaixo da média Mestre+ (${vsMin.toFixed(2)}/min vs ${ref.vs[0].toFixed(2)})`); }
+  if (gd15 !== null) { if (gd15 >= 400) good.push(`lane ganha (${gd15 > 0 ? "+" : ""}${gd15} de ouro aos 15)`); else if (gd15 <= -600) bad.push(`lane perdida (${gd15} de ouro aos 15${gd10 !== null ? `, ${gd10} aos 10` : ""})`); }
+  if (myLvl10 !== null && oppLvl !== null && oppLvl - myLvl10 >= 2) bad.push(`aos 10 min você estava ${oppLvl - myLvl10} níveis atrás do seu adversário`);
+  const ctl = myControl.length, wpm = myWards.length / min;
+  if (role === "sup") {
+    if (ctl * 10 / min < 0.6) bad.push(`poucas wards de controle (${ctl} na partida)`);
+    if (myClears.length >= 6) good.push(`${myClears.length} wards inimigas limpas`);
+    if (wpm >= 1.2) good.push(`muita visão colocada (${myWards.length} wards)`);
+  }
+  if (objs.length >= 2 && noSetup.length >= Math.ceil(objs.length / 2) && role === "sup") bad.push(`em ${noSetup.length} de ${objs.length} objetivos você não colocou ward nos 90 s antes`);
   const iso = deaths.filter((x) => x.isolated && /river|jungle/.test(x.zone));
   const objD = deaths.filter((x) => x.objective);
   const laneD = deaths.filter((x) => x.early && /bot|top|mid/.test(x.zone) && !x.isolated);
   const fightD = deaths.filter((x) => x.alliesNear >= 2 && x.with.length >= 2);
 
-  const score: Record<FocusKey, number> = { mapa: iso.length * 2, objetivo: objD.length * 1.5, lane: laneD.length, luta: fightD.length, visao: bad.some((b) => b.startsWith("visão")) ? 1.5 : 0 };
+  const score: Record<FocusKey, number> = { mapa: iso.length * 2, objetivo: objD.length * 1.5, lane: laneD.length, luta: fightD.length, visao: (bad.some((b) => /visão|controle|objetivos você não/.test(b)) ? 1.5 : 0) + noSetup.length * 0.3 };
   const top = (Object.entries(score) as [FocusKey, number][]).sort((x, y) => y[1] - x[1])[0];
   const focus = top && top[1] > 0 ? FOCUS[top[0]](deaths) : null;
 
@@ -120,7 +150,8 @@ export function analyze(game: any, tl: any, cat: Catalog, me: { gameName?: strin
   }
   if (bad.length) parts1.push(`Ponto a melhorar: ${bad.join("; ")}.`);
   if (focus && ROLE_TIP[role ?? ""]) parts1.push(ROLE_TIP[role ?? ""]!(focus.key));
-  return { gameId: game.gameId, champ, role, win: !!st.win, min, k, d, a, kp, teamKills, players, frames, kills, objs, deaths, good, bad, focus, story: parts1.join(" ") };
+  return { gameId: game.gameId, champ, role, win: !!st.win, min, k, d, a, kp, teamKills, players, frames, kills, objs, deaths, good, bad, focus, story: parts1.join(" "),
+    lane: { gd10, gd15 }, vision: { wards: myWards.length, control: ctl, clears: myClears.length, noSetup: noSetup.length, objectives: objs.length } };
 }
 
 /** Fecho da revisão pela sua rota: como o seu papel rende melhor, ligado ao foco. */

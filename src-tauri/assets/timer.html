@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>helporoLOL Timer</title>
+<title>helporoLOL ao vivo</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@600;700&family=IBM+Plex+Sans:wght@400;500&display=swap">
 <style>
 /* Timer manual: uma linha por inimigo, três quadrados (ult e os dois feitiços). Toque = começa; toque de novo = cancela. */
@@ -31,12 +31,26 @@ h1 { font-family:var(--display); font-size:20px; margin:0; letter-spacing:.04em;
 .empty { color:var(--muted); font-size:14px; background:var(--panel); border:1px dashed var(--line); border-radius:8px; padding:18px; text-align:center; line-height:1.5; }
 .empty button { margin-top:10px; font:inherit; font-size:13px; background:var(--panel2); color:var(--fg); border:1px solid var(--line); border-radius:6px; padding:6px 12px; cursor:pointer; }
 .note { font-size:12px; color:var(--muted); }
-.threat{margin:14px 0;padding:10px 12px;border:1px solid #2a2f3a;border-radius:10px;font-size:14px;line-height:1.5}.threat h2{font-size:15px;margin:0 0 6px}.threat p{margin:4px 0}
+.threat:empty{display:none}.threat{margin:14px 0;padding:10px 12px;border:1px solid #2a2f3a;border-radius:10px;font-size:14px;line-height:1.5}.threat h2{font-size:15px;margin:0 0 6px}.threat p{margin:4px 0}
+.coach,.objs{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 12px;display:flex;flex-direction:column;gap:6px;font-size:14px;line-height:1.45}
+.coach:empty,.objs:empty{display:none}
+.coach h2,.objs h2,.sec{font-family:var(--display);font-size:15px;margin:2px 0;letter-spacing:.03em}
+.coach .win{color:var(--muted);font-size:13px}
+.coach ul{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:4px}
+.coach li.avoid::marker{color:var(--red)} .coach li.do::marker,.coach li.info::marker{color:var(--good)}
+.next{display:flex;gap:8px;align-items:baseline;font-size:13.5px}.next b{font-family:var(--display);color:var(--gold);min-width:44px;font-variant-numeric:tabular-nums}
+.objs .o{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;padding:4px 0;border-top:1px solid var(--line)}
+.objs .o:first-of-type{border-top:0}.objs .o b{font-family:var(--display);font-variant-numeric:tabular-nums}
+.objs .live{color:var(--good)}.objs .gone{color:var(--muted)}
+.item{display:flex;gap:10px;align-items:center}.item img{width:36px;height:36px;border-radius:6px;border:1px solid var(--line)}
 </style>
 </head>
 <body>
 <div class="wrap">
-  <header><h1>helporo<span>LOL</span> timer</h1><span class="st"><span class="clock" id="clock"></span> <span id="st">conectando…</span></span></header>
+  <header><h1>helporo<span>LOL</span> ao vivo</h1><span class="st"><span class="clock" id="clock"></span> <span id="st">conectando…</span></span></header>
+  <section id="coach" class="coach"></section>
+  <section id="objs" class="objs"></section>
+  <h2 class="sec">Timers manuais (toque quando VIR)</h2>
   <div id="list"><div class="empty">Procurando a partida…</div></div>
   <section id="threat" class="threat"></section>
   <p class="note">Toque quando VIR o feitiço ou o ult sendo usado. Toque de novo pra cancelar. Embaixo do quadrado aparece o horário da partida em que volta, pra mandar no chat. Feitiços: tempo base. Ult: tempo do nível atual com uma estimativa média de aceleração de habilidade pelo tempo de jogo (sem ler item nem runa), por isso o ~.</p>
@@ -61,6 +75,7 @@ async function boot() {
     try { ITEMS = (await (await fetch(`${CDN}/cdn/${V}/data/pt_BR/item.json`)).json()).data; } catch {}
   } catch { $("st").textContent = "sem internet pros ícones"; }
   poll(); setInterval(poll, 5000);
+  pollCoach(); setInterval(pollCoach, 5000); setInterval(renderCoach, 1000);
   try { await navigator.wakeLock?.request("screen"); } catch {}
 }
 
@@ -73,6 +88,64 @@ async function ultCd(id) {
   try { const j = await (await fetch(`${CDN}/cdn/${V}/data/en_US/champion/${id}.json`)).json(); ULT[id] = j.data[id].spells[3].cooldown; }
   catch { ULT[id] = [120, 100, 80]; }
   return ULT[id];
+}
+
+// ---------- coach ao vivo: dicas da fase, próxima coisa da linha do tempo, objetivos e próximo item ----------
+let COACH = null, EVENTS = null, MEITEMS = [], ROSTER = [];
+const T = { drake: 300, drakeRe: 300, elderRe: 360, grubs: 480, grubsEnd: 885, herald: 900, heraldEnd: 1185, baron: 1200, baronRe: 360 };
+async function pollCoach() {
+  if (demo) {
+    COACH = { champ: "Soraka", win: "Seu time escala. Vocês ficam na frente a partir de 26-30 min (2-3 itens).", items: [3877, 6620, 3158, 6617],
+      phases: [{ key: "lane", tips: [{ kind: "avoid", t: "Thresh: fique atrás dos minions, fora da linha do Q (Sentença Mortal)." }, { kind: "avoid", t: "Lee Sin ganka cedo: visão no rio e no tribush antes de 2:15." }, { kind: "do", t: "Roam quando a wave bater na torre deles." }] },
+        { key: "mid", tips: [{ kind: "avoid", t: "Na névoa, respeite Q (Onda Sônica) de Lee Sin e E (Encanto) de Ahri." }, { kind: "do", t: "Visão 60-90 s antes de cada objetivo." }] },
+        { key: "late", tips: [{ kind: "do", t: "Agrupe em volta do carry e force barão com visão." }] }],
+      timeline: [{ at: 135, t: "Lee Sin pode gankar a partir de 2:15: ward no rio/tribush agora." }, { at: 225, t: "Dragão nasce aos 5:00: ward de controle no rio/pit." }, { at: 410, t: "Vastilarvas aos 8:00 no topo." }, { at: 825, t: "Arauto aos 15:00." }, { at: 1110, t: "Barão aos 20:00." }] };
+    EVENTS = { events: [{ name: "DragonKill", time: 312, killer: "a" }], me: { gold: 1250 } };
+  } else {
+    try { COACH = await (await fetch("/coach", { cache: "no-store" })).json(); } catch { COACH = null; }
+    try { EVENTS = await (await fetch("/events", { cache: "no-store" })).json(); } catch { EVENTS = null; }
+  }
+  renderCoach();
+}
+function renderCoach() {
+  const el = $("coach"), ob = $("objs"); if (!el || !ob) return;
+  const g = gameNow();
+  if (!COACH || g == null) { el.innerHTML = COACH ? `<h2>Coach · ${COACH.champ ?? ""}</h2><p class="win">${COACH.win ?? ""}</p><p class="note">As dicas da fase aparecem quando a partida começar.</p>` : ""; ob.innerHTML = ""; return; }
+  const ph = g < 14 * 60 ? "lane" : g < 25 * 60 ? "mid" : "late";
+  const P = (COACH.phases || []).find((p) => p.key === ph);
+  const label = { lane: "Fase de rotas", mid: "Meio de jogo", late: "Fim de jogo" }[ph];
+  const next = (COACH.timeline || []).filter((x) => x.at > g - 10).slice(0, 2);
+  // próximo item: o primeiro da build que você ainda não tem, e quanto falta de ouro
+  let itemHtml = "";
+  const gold = EVENTS?.me?.gold;
+  const need = (COACH.items || []).find((id) => !MEITEMS.includes(id) && ITEMS[id]);
+  if (need && typeof gold === "number") {
+    const it = ITEMS[need], cost = it.gold?.total ?? 0, left = Math.max(0, Math.round(cost - gold));
+    itemHtml = `<div class="item">${V ? `<img src="${CDN}/cdn/${V}/img/item/${need}.png" alt="">` : ""}<span><b>Próximo item:</b> ${it.name} · ${left ? `faltam ${left} de ouro` : "dá pra comprar na próxima volta"}</span></div>`;
+  }
+  el.innerHTML = `<h2>Agora · ${label}${COACH.champ ? ` · ${COACH.champ}` : ""}</h2>`
+    + (P?.tips?.length ? `<ul>${P.tips.slice(0, 3).map((t) => `<li class="${t.kind}">${t.t}</li>`).join("")}</ul>` : "")
+    + next.map((x) => `<div class="next"><b>${x.at > g ? fmt(x.at - g) : "agora"}</b><span>${x.t}</span></div>`).join("")
+    + itemHtml + `<p class="win">${COACH.win ?? ""}</p>`;
+  // objetivos pelos eventos do jogo (os mesmos que aparecem no feed pra todo mundo)
+  const ev = EVENTS?.events || [];
+  const kills = (n) => ev.filter((e) => e.name === n).map((e) => e.time);
+  const teamOf = (name) => ROSTER.find((p) => (p.riotId || "").toLowerCase() === String(name || "").toLowerCase())?.team;
+  const dragons = ev.filter((e) => e.name === "DragonKill");
+  const byTeam = {}; dragons.forEach((d) => { const t = teamOf(d.killer) || "?"; byTeam[t] = (byTeam[t] || 0) + 1; });
+  const soul = Object.values(byTeam).some((n) => n >= 4);
+  const lastD = dragons.length ? dragons[dragons.length - 1].time : null;
+  const rows = [];
+  const row = (nm, at, endAt) => {
+    if (endAt != null && g >= endAt) return rows.push(`<div class="o"><span>${nm}</span><b class="gone">sumiu</b></div>`);
+    if (at == null) return;
+    rows.push(`<div class="o"><span>${nm}</span><b class="${g >= at ? "live" : ""}">${g >= at ? "vivo" : `em ${fmt(at - g)} (${fmt(at)})`}</b></div>`);
+  };
+  row(soul ? "Dragão Ancião" : `Dragão${dragons.length ? ` (${dragons.length}º feito)` : ""}`, lastD == null ? T.drake : lastD + (soul ? T.elderRe : T.drakeRe));
+  if (kills("HordeKill").length >= 3) rows.push(`<div class="o"><span>Vastilarvas</span><b class="gone">feitas</b></div>`); else row("Vastilarvas", T.grubs, T.grubsEnd);
+  if (kills("HeraldKill").length) rows.push(`<div class="o"><span>Arauto</span><b class="gone">feito</b></div>`); else row("Arauto", T.herald, T.heraldEnd);
+  const lb = kills("BaronKill"); row("Barão", lb.length ? lb[lb.length - 1] + T.baronRe : T.baron);
+  ob.innerHTML = `<h2>Objetivos</h2>${rows.join("")}<p class="note">Pelos eventos da partida (o mesmo feed que todo mundo vê). Ward 60-90 s antes de cada um.</p>`;
 }
 
 async function poll() {
@@ -90,6 +163,7 @@ async function poll() {
   if (!data.inGame) { $("st").textContent = "esperando partida"; clockBase = null; return render([]); }
   if (typeof data.gameTime === "number") clockBase = { game: data.gameTime, at: Date.now() };
   const me = data.players.find((p) => (p.riotId || "").toLowerCase() === (data.me || "").toLowerCase());
+  ROSTER = data.players; MEITEMS = (me?.items || []);
   const mine = me ? me.team : "ORDER";
   const list = data.players.filter((p) => p.team !== mine);
   for (const p of list) p.ult = await ultCd(champId(p.champ));

@@ -17,7 +17,7 @@ const METRICS: { k: string; label: string; better: 1 | -1; of: (g: Game) => numb
   { k: "dmg", label: "Dano em campeões por min", better: 1, of: (g) => (g.s && g.min ? g.s.dmg / g.min : null), fmt: (v) => Math.round(v).toString() },
 ];
 const mmss = (t: number) => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, "0")}`;
-const cacheKey = (id: number) => `helporo.rev2.${id}`;
+const cacheKey = (id: number) => `helporo.rev3.${id}`;
 const fromCache = (id: number): Review | null => { try { return JSON.parse(localStorage.getItem(cacheKey(id)) || "null"); } catch { return null; } };
 const toCache = (r: Review) => { try { localStorage.setItem(cacheKey(r.gameId), JSON.stringify(r)); } catch { /* cheio */ } };
 
@@ -80,7 +80,9 @@ export function PostGame({ games, bench, cat, gameName }: { games: Game[]; bench
             {rev.focus && <div className="train"><b>Treine isto: {rev.focus.title}</b><p>{rev.focus.text}</p></div>}
             <div className="lbl" style={{ marginTop: 10 }}>Feedback desta partida</div>
             <p className="story">{rev.story || "Partida sem nada fora do comum."}</p>
-            <p className="note">{rev.champ} · {rev.win ? "vitória" : "derrota"} · {Math.round(rev.min)} min · {rev.k}/{rev.d}/{rev.a} · KP {Math.round(rev.kp * 100)}%</p>
+            <p className="note">{rev.champ} · {rev.win ? "vitória" : "derrota"} · {Math.round(rev.min)} min · {rev.k}/{rev.d}/{rev.a} · KP {Math.round(rev.kp * 100)}%
+              {rev.lane?.gd15 != null ? ` · lane ${rev.lane.gd15 > 0 ? "+" : ""}${rev.lane.gd15} de ouro aos 15` : ""}
+              {rev.vision ? ` · ${rev.vision.wards} wards (${rev.vision.control} de controle), ${rev.vision.clears} limpas` : ""}</p>
             {rev.deaths.length > 0 && (<>
               <div className="lbl">Suas mortes</div>
               <ul className="deaths">{rev.deaths.map((d) => (

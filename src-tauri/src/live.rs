@@ -4,7 +4,11 @@
 //! API local da partida (Live Client Data, 127.0.0.1:2999). Os timers são manuais:
 //! você toca no quadrado quando VÊ o feitiço ou o ult sendo usado.
 
+use std::sync::Mutex;
 use std::thread;
+
+/// Coach da partida montado pelo app (dicas por fase, linha do tempo, build): a página do celular lê em /coach.
+static COACH: Mutex<String> = Mutex::new(String::new());
 
 pub const PORT: u16 = 7777;
 const PAGE: &str = include_str!("../assets/timer.html");
@@ -45,6 +49,31 @@ fn players() -> serde_json::Value {
     serde_json::json!({ "inGame": true, "me": me, "gameTime": game_time, "players": slim })
 }
 
+/// Eventos da partida que importam pro coach: objetivos (dragão, vastilarvas, arauto, barão) e torres.
+/// Tudo isso aparece pra todo mundo no jogo; vem da mesma API local da partida.
+fn events() -> serde_json::Value {
+    let Some(ev) = live("eventdata") else { return serde_json::json!({ "inGame": false }) };
+    let keep = ["DragonKill", "HeraldKill", "BaronKill", "HordeKill", "TurretKilled", "InhibKilled", "FirstBrick", "GameStart"];
+    let list: Vec<_> = ev
+        .get("Events")
+        .and_then(|e| e.as_array())
+        .map(|a| {
+            a.iter()
+                .filter(|e| e.get("EventName").and_then(|n| n.as_str()).map_or(false, |n| keep.contains(&n)))
+                .map(|e| serde_json::json!({
+                    "name": e.get("EventName"), "time": e.get("EventTime"),
+                    "dragon": e.get("DragonType"), "killer": e.get("KillerName"),
+                }))
+                .collect()
+        })
+        .unwrap_or_default();
+    let me = live("activeplayer").map(|p| serde_json::json!({
+        "gold": p.get("currentGold"), "level": p.get("level"),
+        "name": p.get("riotId").or(p.get("summonerName")),
+    }));
+    serde_json::json!({ "inGame": true, "events": list, "me": me })
+}
+
 /// IP da rede de casa (Wi-Fi/cabo). Pula VPNs como Radmin (26.x) e Hamachi (25.x), que outro
 /// aparelho da casa não alcança, e prefere 192.168.x, depois 10.x e 172.16-31.x.
 fn lan_ip() -> Option<String> {
@@ -82,6 +111,11 @@ pub fn serve() {
         for req in server.incoming_requests() {
             let res = match req.url() {
                 "/players" => tiny_http::Response::from_string(players().to_string()).with_header(json.clone()),
+                "/events" => tiny_http::Response::from_string(events().to_string()).with_header(json.clone()),
+                "/coach" => {
+                    let c = COACH.lock().map(|g| g.clone()).unwrap_or_default();
+                    tiny_http::Response::from_string(if c.is_empty() { "null".to_string() } else { c }).with_header(json.clone())
+                }
                 _ => tiny_http::Response::from_string(PAGE).with_header(html.clone()),
             };
             let _ = req.respond(res);
@@ -92,4 +126,12 @@ pub fn serve() {
 #[tauri::command]
 pub fn timer_url() -> String {
     url()
+}
+
+/// O app manda o coach atual (JSON) pra página do celular.
+#[tauri::command]
+pub fn set_coach(json: String) {
+    if let Ok(mut g) = COACH.lock() {
+        *g = json;
+    }
 }

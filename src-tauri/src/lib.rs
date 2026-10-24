@@ -9,7 +9,7 @@ pub fn run() {
             live::serve(); // página do timer manual na rede de casa
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![lcu::champ_select, lcu::current_summoner, lcu::match_history, lcu::gameflow_phase, lcu::set_rune_page, lcu::set_item_set, lcu::match_game, lcu::match_timeline, live::timer_url])
+        .invoke_handler(tauri::generate_handler![lcu::champ_select, lcu::current_summoner, lcu::match_history, lcu::gameflow_phase, lcu::set_rune_page, lcu::set_item_set, lcu::match_game, lcu::match_timeline, live::timer_url, live::set_coach])
         .run(tauri::generate_context!())
         .expect("erro ao iniciar o helporoLOL");
 }

@@ -193,6 +193,13 @@ export default function App() {
   const kitKey = [...ROLES.map((r) => draft.ally[r]), ...ROLES.map((r) => draft.enemy[r]), shown].filter(Boolean).join(",");
   useEffect(() => { if (kitKey) loadKits(cat, kitKey.split(",")).then(setKits).catch(() => {}); }, [kitKey, cat]);
   const coach = useMemo(() => { try { return buildCoach({ role: myRole, me: shown, ally: { ...draft.ally, [myRole]: shown }, enemy: draft.enemy, flags, scaling, kits }); } catch { return null; } }, [myRole, shown, draft, flags, scaling, kits, laneVer]);
+  // manda o coach pra página do celular (dicas por fase, linha do tempo e a build pra sugerir o próximo item)
+  const buildNow = useMemo(() => (shown ? builds?.[myRole]?.[shown] ?? snapshotBuild(shown, myRole, names) : undefined), [shown, myRole, builds, names]);
+  useEffect(() => {
+    if (!inTauri() || !coach) return;
+    const items = buildNow ? [buildNow.item_sup, ...buildNow.core, buildNow.botas].filter((x): x is number => !!x) : [];
+    invoke("set_coach", { json: JSON.stringify({ champ: shown, role: myRole, win: coach.win, phases: coach.phases, timeline: coach.timeline, threats: coach.threats, items }) }).catch(() => {});
+  }, [coach, shown, myRole, buildNow]);
   // abas: na partida abre o coach; quando acaba, o pós-jogo
   const [tab, setTab] = useState<"draft" | "coach" | "pos" | "config">("draft");
   useEffect(() => { if (phase === "InProgress") setTab("coach"); else if (phase === "EndOfGame") setTab("pos"); else if (phase === "ChampSelect") setTab("draft"); }, [phase]);
