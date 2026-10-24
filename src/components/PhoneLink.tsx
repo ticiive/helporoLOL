@@ -11,7 +11,7 @@ export function PhoneLink({ urls, onClose }: { urls: string[]; onClose: () => vo
     <div className="modal" role="dialog" aria-label="Abrir no celular" onClick={onClose}>
       <div className="mbox phone" onClick={(e) => e.stopPropagation()}>
         <div className="dhead"><b>Coach ao vivo no celular ou no Mac</b><button className="ghost" onClick={onClose}>Fechar</button></div>
-        <p className="note">Mesma rede Wi-Fi do PC. Aponte a câmera pro QR ou digite o endereço; salve nos favoritos, ele não muda.</p>
+        <p className="note">Mesma rede Wi-Fi do PC. O jeito mais fácil: salve <b>ticiive.github.io/helporoLOL</b> nos favoritos do celular; ela abre o coach do PC sozinha. Ou aponte a câmera pro QR.</p>
         {img && <img className="qr" src={img} alt={`QR code de ${url}`} />}
         <code className="addr">{url}</code>
         {urls.length > 1 && (

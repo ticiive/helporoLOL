@@ -1,6 +1,6 @@
 name: Publicar no GitHub Pages
 
-# A versão web (draft em modo manual, sem leitura do cliente) a cada push na main.
+# A página do celular (abre o coach ao vivo do PC) na raiz, a demonstração e o draft web em /draft.
 on:
   push:
     branches: [main]
@@ -29,9 +29,15 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build
+      - name: Monta o site
+        run: |
+          mkdir -p site/draft
+          cp -r dist/. site/draft/
+          cp pages/index.html site/index.html
+          cp src-tauri/assets/timer.html site/ao-vivo-demo.html
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: dist
+          path: site
       - id: deployment
         uses: actions/deploy-pages@v4
