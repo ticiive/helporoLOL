@@ -15,7 +15,7 @@ O app tem quatro abas.
   - A condição de vitória, a força do time por minuto e dicas da fase de rotas, do meio e do fim do jogo, específicas do draft.
   - As dicas falam da habilidade que pesa de cada inimigo, com o nome em português e a recarga no nível 1 ("respeite o E (Encanto) de Ahri"), do gank do jungle inimigo, dos níveis 2 e 6, da visão e do roam.
   - Usa os tempos da temporada 2026: minions 0:30, campos 0:55, scuttle 2:55, dragão 5:00, vastilarvas 8:00, Arauto 15:00 e Barão 20:00.
-- **Ao vivo** (celular ou Mac, no endereço que o app mostra no topo):
+- **Ao vivo** no celular, em qualquer rede (até no 4G): o botão 📱 do app mostra um QR que abre ticiive.github.io/helporoLOL com o canal secreto do seu PC. O app publica a partida nesse canal (ntfy.sh, sem conta, sem nomes de jogador) e a página lê de lá. Também dá pra abrir pela rede de casa em `http://helporo.local:7777`.
   - As dicas da fase em que a partida está e a próxima coisa da linha do tempo, com contagem regressiva.
   - Os timers de objetivo, pelos eventos da partida.
   - O próximo item da build e quanto falta de ouro.

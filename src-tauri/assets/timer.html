@@ -66,6 +66,24 @@ let clockBase = null; // { game: segundos de partida, at: Date.now() da leitura 
 const gameNow = () => (clockBase ? clockBase.game + (Date.now() - clockBase.at) / 1000 : null);
 const fmt = (t) => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, "0")}`;
 const demo = new URLSearchParams(location.search).has("demo");
+// Modo internet (GitHub Pages): lê o canal secreto do ntfy.sh que o app do PC publica. Modo local: o próprio PC serve /players.
+const RELAY = location.protocol === "https:" && !demo;
+let TOPIC = (location.hash.match(/t=([\w-]+)/) || [])[1] || "";
+try { if (TOPIC) localStorage.setItem("helporo.topic", TOPIC); else TOPIC = localStorage.getItem("helporo.topic") || ""; } catch {}
+let RG = null, RGat = 0, RC = null; // último estado da partida e último coach recebidos
+function relayStart() {
+  if (!TOPIC) return;
+  const es = new EventSource(`https://ntfy.sh/${TOPIC}/sse?since=45m`);
+  es.onmessage = (e) => {
+    let m; try { m = JSON.parse(e.data); } catch { return; }
+    if (m.event !== "message" || !m.message) return;
+    let d; try { d = JSON.parse(m.message); } catch { return; }
+    if (d.k === "coach") RC = d;
+    else if (d.k === "game") { RG = d; RGat = (m.time || Date.now() / 1000) * 1000; }
+    else if (d.k === "end") RG = null;
+  };
+  es.onerror = () => { if (!RG) $("st").textContent = "reconectando…"; }; // o navegador reconecta sozinho
+}
 
 async function boot() {
   try {
@@ -74,7 +92,8 @@ async function boot() {
     CHAMPS = c.data; SPELLS = s.data;
     try { ITEMS = (await (await fetch(`${CDN}/cdn/${V}/data/pt_BR/item.json`)).json()).data; } catch {}
   } catch { $("st").textContent = "sem internet pros ícones"; }
-  poll(); setInterval(poll, 5000);
+  if (RELAY) relayStart();
+  poll(); setInterval(poll, RELAY ? 2000 : 5000);
   pollCoach(); setInterval(pollCoach, 5000); setInterval(renderCoach, 1000);
   try { await navigator.wakeLock?.request("screen"); } catch {}
 }
@@ -101,6 +120,8 @@ async function pollCoach() {
         { key: "late", tips: [{ kind: "do", t: "Agrupe em volta do carry e force barão com visão." }] }],
       timeline: [{ at: 135, t: "Lee Sin pode gankar a partir de 2:15: ward no rio/tribush agora." }, { at: 225, t: "Dragão nasce aos 5:00: ward de controle no rio/pit." }, { at: 410, t: "Vastilarvas aos 8:00 no topo." }, { at: 825, t: "Arauto aos 15:00." }, { at: 1110, t: "Barão aos 20:00." }] };
     EVENTS = { events: [{ name: "DragonKill", time: 312, killer: "a" }], me: { gold: 1250 } };
+  } else if (RELAY) {
+    COACH = RC; EVENTS = RG ? { events: RG.events || [], me: { gold: RG.gold } } : null;
   } else {
     try { COACH = await (await fetch("/coach", { cache: "no-store" })).json(); } catch { COACH = null; }
     try { EVENTS = await (await fetch("/events", { cache: "no-store" })).json(); } catch { EVENTS = null; }
@@ -131,8 +152,9 @@ function renderCoach() {
   const ev = EVENTS?.events || [];
   const kills = (n) => ev.filter((e) => e.name === n).map((e) => e.time);
   const teamOf = (name) => ROSTER.find((p) => (p.riotId || "").toLowerCase() === String(name || "").toLowerCase())?.team;
+  const teamOfEv = (e) => e.team || teamOf(e.killer);
   const dragons = ev.filter((e) => e.name === "DragonKill");
-  const byTeam = {}; dragons.forEach((d) => { const t = teamOf(d.killer) || "?"; byTeam[t] = (byTeam[t] || 0) + 1; });
+  const byTeam = {}; dragons.forEach((d) => { const t = teamOfEv(d) || "?"; byTeam[t] = (byTeam[t] || 0) + 1; });
   const soul = Object.values(byTeam).some((n) => n >= 4);
   const lastD = dragons.length ? dragons[dragons.length - 1].time : null;
   const rows = [];
@@ -157,10 +179,16 @@ async function poll() {
     { riotId: "c", team: "CHAOS", champ: "game_character_displayname_Ahri", level: 10, items: [3165, 3020, 4645], spell1: "x_SummonerSpell_SummonerFlash_DisplayName", spell2: "x_SummonerSpell_SummonerDot_DisplayName" },
     { riotId: "d", team: "CHAOS", champ: "game_character_displayname_Jinx", level: 9, spell1: "x_SummonerSpell_SummonerFlash_DisplayName", spell2: "x_SummonerSpell_SummonerHeal_DisplayName" },
     { riotId: "e", team: "CHAOS", champ: "game_character_displayname_Thresh", level: 5, spell1: "x_SummonerSpell_SummonerFlash_DisplayName", spell2: "x_SummonerSpell_SummonerExhaust_DisplayName" }] };
+  else if (RELAY) {
+    if (!TOPIC) { $("st").textContent = "sem link"; $("list").innerHTML = `<div class="empty">Abra o helporoLOL no PC, clique no botão 📱 do topo e escaneie o QR com este celular. Depois salve a página nos favoritos.<br><button onclick="location.search='?demo'">Ver demonstração</button></div>`; return; }
+    // partida velha (mais de 4 min sem sinal): considera encerrada
+    if (RG && Date.now() - RGat > 240000) RG = null;
+    data = RG ? { inGame: true, me: "me", gameTime: (RG.t ?? 0) + (Date.now() - RGat) / 1000, players: RG.players.map((p, i) => ({ ...p, riotId: p.me ? "me" : `p${i}` })) } : { inGame: false };
+  }
   else { try { data = await (await fetch("/players", { cache: "no-store" })).json(); } catch { data = null; } }
 
   if (!data) { $("st").textContent = "helporoLOL fechado no PC"; return render([]); }
-  if (!data.inGame) { $("st").textContent = "esperando partida"; clockBase = null; return render([]); }
+  if (!data.inGame) { $("st").textContent = RELAY ? (RC ? `coach pronto (${RC.champ ?? ""}) · esperando partida` : "esperando o PC") : "esperando partida"; clockBase = null; return render([]); }
   if (typeof data.gameTime === "number") clockBase = { game: data.gameTime, at: Date.now() };
   const me = data.players.find((p) => (p.riotId || "").toLowerCase() === (data.me || "").toLowerCase());
   ROSTER = data.players; MEITEMS = (me?.items || []);
@@ -170,6 +198,7 @@ async function poll() {
   $("st").textContent = demo ? "demonstração" : "em partida";
   render(list);
   threat(list);
+  if (RELAY) pollCoach();
 }
 
 // Ameaças pelos itens que os inimigos já fecharam (os mesmos que aparecem no placar) e o que responde a elas.

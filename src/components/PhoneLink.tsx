@@ -11,15 +11,15 @@ export function PhoneLink({ urls, onClose }: { urls: string[]; onClose: () => vo
     <div className="modal" role="dialog" aria-label="Abrir no celular" onClick={onClose}>
       <div className="mbox phone" onClick={(e) => e.stopPropagation()}>
         <div className="dhead"><b>Coach ao vivo no celular ou no Mac</b><button className="ghost" onClick={onClose}>Fechar</button></div>
-        <p className="note">Mesma rede Wi-Fi do PC. O jeito mais fácil: salve <b>ticiive.github.io/helporoLOL</b> nos favoritos do celular; ela abre o coach do PC sozinha. Ou aponte a câmera pro QR.</p>
+        <p className="note">Aponte a câmera do celular pro QR e salve a página nos favoritos (ou na tela inicial). Funciona em qualquer rede, até no 4G: o app manda a partida pela internet.</p>
         {img && <img className="qr" src={img} alt={`QR code de ${url}`} />}
         <code className="addr">{url}</code>
         {urls.length > 1 && (
-          <button className="link" onClick={() => setWhich(which ? 0 : 1)}>
-            {which ? "Usar o endereço fixo (helporo.local)" : "Não abriu? Use o IP deste PC"}
+          <button className="link" onClick={() => setWhich((which + 1) % urls.length)}>
+            {which === 0 ? "Prefiro pela rede de casa (sem internet)" : "Voltar pro link da internet"}
           </button>
         )}
-        <p className="note">O endereço helporo.local funciona no iPhone, no Mac e no Windows. Em alguns Android ele não abre: aí use o IP. Se o IP vive mudando, fixe o IP do PC no roteador (reserva de DHCP).</p>
+        <p className="note">O link é secreto e só deste PC. Vão pro canal só campeões, níveis, feitiços, itens, tempo de partida, objetivos e as dicas; nenhum nome de jogador.</p>
       </div>
     </div>
   );

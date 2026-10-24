@@ -1,6 +1,6 @@
 name: Publicar no GitHub Pages
 
-# A página do celular (abre o coach ao vivo do PC) na raiz, a demonstração e o draft web em /draft.
+# A página do coach ao vivo (lê pela internet o canal que o app do PC publica) na raiz, e o draft web em /draft.
 on:
   push:
     branches: [main]
@@ -33,7 +33,7 @@ jobs:
         run: |
           mkdir -p site/draft
           cp -r dist/. site/draft/
-          cp pages/index.html site/index.html
+          cp src-tauri/assets/timer.html site/index.html
           cp src-tauri/assets/timer.html site/ao-vivo-demo.html
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3

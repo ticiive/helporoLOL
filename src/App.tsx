@@ -119,7 +119,9 @@ export default function App() {
   useEffect(() => {
     if (!inTauri()) return;
     invoke<string>("timer_url").then(setTimerUrl).catch(() => {});
-    invoke<string[]>("timer_urls").then(setTimerUrls).catch(() => {});
+    // primeiro o link da internet (GitHub Pages, funciona em qualquer rede); depois os da rede de casa
+    Promise.all([invoke<string>("relay_url").catch(() => ""), invoke<string[]>("timer_urls").catch(() => [] as string[])])
+      .then(([r, l]) => setTimerUrls([r, ...l].filter(Boolean)));
   }, []);
 
   // Seleção de campeões: lê o cliente a cada 1,5 s
@@ -205,7 +207,15 @@ export default function App() {
   useEffect(() => {
     if (!inTauri() || !coach) return;
     const items = buildNow ? [buildNow.item_sup, ...buildNow.core, buildNow.botas].filter((x): x is number => !!x) : [];
-    invoke("set_coach", { json: JSON.stringify({ champ: shown, role: myRole, win: coach.win, phases: coach.phases, timeline: coach.timeline, threats: coach.threats, items }) }).catch(() => {});
+    // até ~3,9 mil caracteres (limite de uma mensagem do canal da internet): corta dicas até caber
+    let n = 4, json = "";
+    do {
+      json = JSON.stringify({ k: "coach", champ: shown, role: myRole, win: coach.win.slice(0, 220), items,
+        phases: coach.phases.map((p) => ({ key: p.key, tips: p.tips.slice(0, n).map((t) => ({ kind: t.kind, t: t.t })) })),
+        timeline: coach.timeline.slice(0, 7) });
+      n--;
+    } while (json.length > 3900 && n > 0);
+    invoke("set_coach", { json }).catch(() => {});
   }, [coach, shown, myRole, buildNow]);
   // abas: na partida abre o coach; quando acaba, o pós-jogo
   const [tab, setTab] = useState<"draft" | "coach" | "pos" | "config">("draft");
@@ -237,7 +247,7 @@ export default function App() {
           <p className="hint">{inTauri() ? "Abre a seleção no cliente e o draft preenche sozinho, inclusive sua rota. Pausando o modo seguir, dá pra editar à mão." : "Prévia sem o cliente: preenche o draft e escolhe sua rota."}</p>
         </div>
         <div className="tools">
-          {timerUrl && <button className="ghost" title="Abrir o coach ao vivo no celular ou no Mac" onClick={() => setPhoneOpen(true)}>📱 Celular: {timerUrl.replace("http://", "")}</button>}
+          {inTauri() && <button className="ghost" title="Abrir o coach ao vivo no celular ou no Mac" onClick={() => setPhoneOpen(true)}>📱 Coach no celular</button>}
           {liveLabel && <span className={`pill ${live?.status === "active" ? "ok" : ""}`}>{liveLabel}</span>}
           {inTauri() && <button className="ghost" onClick={() => setUi({ ...ui, follow: !ui.follow })}>{ui.follow ? "Pausar seguir" : "Seguir cliente"}</button>}
           <button className="ghost" disabled={following} onClick={() => setDraft(EXAMPLE)}>Exemplo</button>

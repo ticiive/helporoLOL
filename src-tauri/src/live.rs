@@ -8,12 +8,12 @@ use std::sync::Mutex;
 use std::thread;
 
 /// Coach da partida montado pelo app (dicas por fase, linha do tempo, build): a página do celular lê em /coach.
-static COACH: Mutex<String> = Mutex::new(String::new());
+pub(crate) static COACH: Mutex<String> = Mutex::new(String::new());
 
 pub const PORT: u16 = 7777;
 const PAGE: &str = include_str!("../assets/timer.html");
 
-fn live(path: &str) -> Option<serde_json::Value> {
+pub(crate) fn live(path: &str) -> Option<serde_json::Value> {
     // O jogo usa certificado autoassinado e só escuta em 127.0.0.1
     let client = reqwest::blocking::Client::builder()
         .danger_accept_invalid_certs(true)
@@ -24,7 +24,7 @@ fn live(path: &str) -> Option<serde_json::Value> {
 }
 
 /// Só o necessário pra montar a tela: campeão, time, nível e os dois feitiços.
-fn players() -> serde_json::Value {
+pub(crate) fn players() -> serde_json::Value {
     let me = live("activeplayername").and_then(|v| v.as_str().map(String::from));
     let list = live("playerlist").and_then(|v| v.as_array().cloned());
     let Some(list) = list else { return serde_json::json!({ "inGame": false }) };
@@ -51,7 +51,7 @@ fn players() -> serde_json::Value {
 
 /// Eventos da partida que importam pro coach: objetivos (dragão, vastilarvas, arauto, barão) e torres.
 /// Tudo isso aparece pra todo mundo no jogo; vem da mesma API local da partida.
-fn events() -> serde_json::Value {
+pub(crate) fn events() -> serde_json::Value {
     let Some(ev) = live("eventdata") else { return serde_json::json!({ "inGame": false }) };
     let keep = ["DragonKill", "HeraldKill", "BaronKill", "HordeKill", "TurretKilled", "InhibKilled", "FirstBrick", "GameStart"];
     let list: Vec<_> = ev
