@@ -53,6 +53,10 @@ jobs:
         working-directory: model
         run: python builds.py
 
+      - name: Força por duração de jogo (plano de jogo)
+        working-directory: model
+        run: python scaling.py
+
       - name: Salva dados e modelo na branch data
         if: always()
         run: |

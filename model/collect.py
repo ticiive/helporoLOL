@@ -161,11 +161,23 @@ def main():
         sys.exit("Defina RIOT_API_KEY.")
     riot = Riot(key)
     deadline = time.time() + args.hours * 3600
+    # STOP_AT (ISO, UTC): horário em que a chave vence; a coleta nunca passa dele
+    stop_at = os.environ.get("STOP_AT", "").strip()
+    if stop_at:
+        import datetime
+        stop = datetime.datetime.fromisoformat(stop_at.replace("Z", "+00:00")).timestamp()
+        if time.time() >= stop:
+            print(f"Passou de STOP_AT ({stop_at}): sem coleta nesta rodada.", flush=True)
+            return
+        deadline = min(deadline, stop)
     DATA.mkdir(parents=True, exist_ok=True)
 
     # 1) ladder (renova a cada rodada: elo muda)
     players = ladder(riot, args.d1)
-    save_json(DATA / "players.json", players)
+    if not players:  # chave vencida ou API fora: mantém o ladder da rodada anterior
+        players = load_json(DATA / "players.json", {})
+    else:
+        save_json(DATA / "players.json", players)
     print(f"jogadores no ladder: {len(players)}", flush=True)
 
     # 2) ids de partidas, jogador por jogador; guarda quem já foi visitado

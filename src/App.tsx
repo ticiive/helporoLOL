@@ -1,4 +1,7 @@
 import { bestVs, bestWith } from "./engine/botlane";
+import { gamePlan, type Scaling } from "./engine/gameplan";
+import { GamePlanPanel } from "./components/GamePlanPanel";
+import { SCALING } from "./engine/scaling";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ChampInput, Icon } from "./components/ChampInput";
 import { ResultPanel } from "./components/ResultPanel";
@@ -10,7 +13,7 @@ import { inTauri, readChampSelect, readHistory, type Account, type LiveState } f
 import { invoke } from "@tauri-apps/api/core";
 import { confidence, loadModel, predict, type TrainedModel } from "./engine/model";
 import { checkUpdate, installUpdate, type Pending } from "./lib/updater";
-import { loadBuilds, loadCounters, loadNames, loadSynergies, snapshotBuild, type Builds, type Names } from "./lib/builds";
+import { loadBuilds, loadCounters, loadNames, loadScaling, loadSynergies, snapshotBuild, type Builds, type Names } from "./lib/builds";
 import { BuildPanel } from "./components/BuildPanel";
 import { specialPicks, type Counters } from "./engine/engine";
 import { buildStats, loadGames, mergeGames, overall, saveGames, type Game } from "./lib/stats";
@@ -80,6 +83,8 @@ export default function App() {
   }, []);
   // runas, builds e counters (dados Mestre+ da branch data) e nomes do Data Dragon
   const [builds, setBuilds] = useState<Builds | null>(null);
+  const [scaling, setScaling] = useState<Scaling>(SCALING);
+  useEffect(() => { loadScaling().then(setScaling).catch(() => {}); }, []);
   const [counters, setCounters] = useState<Counters | null>(null);
   const [synergies, setSynergies] = useState<Counters | null>(null);
   const [names, setNames] = useState<Names | null>(null);
@@ -151,6 +156,7 @@ export default function App() {
   const enemies = ROLES.map((r) => draft.enemy[r]).filter(Boolean) as string[];
   const top = results[0]?.status === "ok" ? results[0] : null;
   const cc = ccThreat(enemies, flags);
+  const plan = useMemo(() => { try { return gamePlan({ ...draft.ally, [myRole]: top?.name ?? draft.ally[myRole] }, draft.enemy, myRole, flags, scaling); } catch { return null; } }, [draft, myRole, top?.name, flags, scaling]);
   const skipBot = new Set([...ROLES.map((r) => draft.ally[r]), ...ROLES.map((r) => draft.enemy[r]), ...draft.bans, ...(settings.exclude?.sup ?? [])].filter(Boolean) as string[]);
   const poolTag = (n: string) => { const c = stats[n]?.byRole.sup; const g = c ? c.w + c.l : 0; return g >= 20 ? `main seu (${g} jogos)` : g >= 3 || settings.pool.sup.includes(n) ? "no seu pool" : "fora do seu pool"; };
   // opções sinalizadas: um counter do oponente direto e uma sinergia com o parceiro, sempre
@@ -298,6 +304,8 @@ export default function App() {
         </div>
       </section>
       <datalist id="champ-list">{cat.list.map((c) => <option key={c.name} value={c.name} />)}</datalist>
+
+      <GamePlanPanel plan={plan} />
 
       <section className="comps">
         <ProfileCard title="Perfil do meu time" p={profile(allies, flags)} side="a" />

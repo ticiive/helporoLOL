@@ -4,6 +4,7 @@
  */
 import { ccThreat, type Counters } from "../engine/engine";
 import { SNAPSHOT, SNAP_COUNTERS, shardId } from "../engine/snapshot";
+import { SCALING } from "../engine/scaling";
 
 const RAW = "https://raw.githubusercontent.com/ticiive/helporoLOL/data/model/out";
 const CDN = "https://ddragon.leagueoflegends.com";
@@ -121,3 +122,9 @@ export function snapshotBuild(champ: string, role: string, n: Names | null): Bui
     core: sb.core.map(it).filter(Boolean), situacionais: [], extras: sb.situational.map(it).filter(Boolean),
   };
 }
+
+/** Winrate por duração de jogo: o da branch data (atualizado todo dia) ou o embutido no app. */
+export const loadScaling = async () => {
+  const own = await getJson<typeof SCALING>("scaling.json");
+  return own && own.bins && Object.keys(own.champs ?? {}).length > 50 ? own : SCALING;
+};
