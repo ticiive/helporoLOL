@@ -20,9 +20,12 @@ O app tem quatro abas.
   - Os timers de objetivo, pelos eventos da partida.
   - O próximo item da build e quanto falta de ouro.
   - Os timers manuais de feitiço e ult, que você toca quando vê.
+  - **Coach por voz** (estilo absol.lol): fala abates e mortes, ace, quem pegou cada objetivo, "dragão em um minuto", as dicas da fase e quando já dá pra comprar o próximo item. Modo sério ou divertido e módulos liga/desliga. Sem rastrear o jungle inimigo nem recarga de inimigo, que a Riot proíbe.
 - **Pós-jogo:** lê a timeline das suas partidas no cliente.
   - Onde e como cada morte aconteceu: zona do mapa, quem matou, se tinha aliado perto e se foi antes de objetivo.
   - O ouro da lane aos 10 e aos 15, as wards (de controle, limpas e antes de cada objetivo) e a comparação com a média Mestre+ do campeão.
+  - **Por que vocês perderam (ou ganharam):** curva de ouro do time e onde a vantagem virou, qual lane perdeu e por quanto, quem do time deles carregou, as lutas que decidiram (e quem morreu primeiro nelas), objetivos entregues depois de mortes, gente pega sozinha no late, e os seus números contra a média Mestre+.
+  - Cada motivo tem 👍/👎 e uma nota, mais um campo "o que mais aconteceu". O botão "Copiar relatório" gera o texto pra colar no chat e ajustar as regras.
   - Um "Treine isto" com o padrão das suas últimas 10 partidas e o replay do minimapa.
 
 ## Como a recomendação é calculada (e testada)
@@ -50,6 +53,7 @@ src/engine/lanedata.ts    lane do sup (coleta Mestre+ BR): contra sup, contra AD
 src/engine/botlane.ts     tabelas do op.gg (sup x sup, ADC + sup)
 src/engine/engine.ts      ranking antigo (regra da main, histórico pessoal)
 src/lib/review.ts         revisão pós-jogo pela timeline do cliente
+src/lib/reasons.ts        motivos da vitória/derrota (time e você)
 src/lib/spells.ts         nomes e recargas das habilidades (Data Dragon, pt_BR)
 src/lib/lcu.ts            seleção, histórico e partidas pela API local do cliente
 src-tauri/src/lcu.rs      API local do cliente (seleção, runas, itens, partidas e timelines)

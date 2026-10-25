@@ -42,12 +42,27 @@ h1 { font-family:var(--display); font-size:20px; margin:0; letter-spacing:.04em;
 .objs .o{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;padding:4px 0;border-top:1px solid var(--line)}
 .objs .o:first-of-type{border-top:0}.objs .o b{font-family:var(--display);font-variant-numeric:tabular-nums}
 .objs .live{color:var(--good)}.objs .gone{color:var(--muted)}
+.voice{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 12px;display:flex;flex-direction:column;gap:8px}
+.vrow{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.voice button{font:inherit;font-size:13.5px;background:var(--panel2);color:var(--fg);border:1px solid var(--line);border-radius:7px;padding:7px 11px;cursor:pointer}
+#vbtn.on{border-color:var(--good);color:var(--good)}
+.seg{display:inline-flex;margin-left:auto}.seg button{border-radius:0}.seg button:first-child{border-radius:7px 0 0 7px}.seg button:last-child{border-radius:0 7px 7px 0;border-left:0}
+.seg button.on,.chips button.on{border-color:var(--gold);color:var(--gold)}
+.chips button{font-size:12.5px;padding:5px 9px;opacity:.6}.chips button.on{opacity:1}
+.vlog{list-style:none;margin:0;padding:0;font-size:13px;color:var(--muted);display:flex;flex-direction:column;gap:3px}.vlog:empty{display:none}
+.vlog li b{font-family:var(--display);color:var(--gold);font-variant-numeric:tabular-nums;margin-right:6px}
 .item{display:flex;gap:10px;align-items:center}.item img{width:36px;height:36px;border-radius:6px;border:1px solid var(--line)}
 </style>
 </head>
 <body>
 <div class="wrap">
   <header><h1>helporo<span>LOL</span> ao vivo</h1><span class="st"><span class="clock" id="clock"></span> <span id="st">conectando…</span></span></header>
+  <section id="voice" class="voice">
+    <div class="vrow"><button id="vbtn" type="button">🔊 Ligar o coach por voz</button>
+      <span class="seg" role="group" aria-label="Modo"><button type="button" data-mode="0">Sério</button><button type="button" data-mode="1">Divertido</button></span></div>
+    <div class="vrow chips" id="vmods"></div>
+    <ul id="vlog" class="vlog"></ul>
+  </section>
   <section id="coach" class="coach"></section>
   <section id="objs" class="objs"></section>
   <h2 class="sec">Timers manuais (toque quando VIR)</h2>
@@ -66,6 +81,7 @@ let clockBase = null; // { game: segundos de partida, at: Date.now() da leitura 
 const gameNow = () => (clockBase ? clockBase.game + (Date.now() - clockBase.at) / 1000 : null);
 const fmt = (t) => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, "0")}`;
 const demo = new URLSearchParams(location.search).has("demo");
+const DEMO0 = 14 * 60 + 5;
 // Modo internet (GitHub Pages): lê o canal secreto do ntfy.sh que o app do PC publica. Modo local: o próprio PC serve /players.
 const RELAY = location.protocol === "https:" && !demo;
 // canal fixo (o mesmo que o app do PC publica); #t=... troca se um dia precisar
@@ -110,7 +126,7 @@ async function ultCd(id) {
 }
 
 // ---------- coach ao vivo: dicas da fase, próxima coisa da linha do tempo, objetivos e próximo item ----------
-let COACH = null, EVENTS = null, MEITEMS = [], ROSTER = [];
+let COACH = null, EVENTS = null, MEITEMS = [], ROSTER = [], MYTEAM = "ORDER";
 const T = { drake: 300, drakeRe: 300, elderRe: 360, grubs: 480, grubsEnd: 885, herald: 900, heraldEnd: 1185, baron: 1200, baronRe: 360 };
 async function pollCoach() {
   if (demo) {
@@ -119,7 +135,12 @@ async function pollCoach() {
         { key: "mid", tips: [{ kind: "avoid", t: "Na névoa, respeite Q (Onda Sônica) de Lee Sin e E (Encanto) de Ahri." }, { kind: "do", t: "Visão 60-90 s antes de cada objetivo." }] },
         { key: "late", tips: [{ kind: "do", t: "Agrupe em volta do carry e force barão com visão." }] }],
       timeline: [{ at: 135, t: "Lee Sin pode gankar a partir de 2:15: ward no rio/tribush agora." }, { at: 225, t: "Dragão nasce aos 5:00: ward de controle no rio/pit." }, { at: 410, t: "Vastilarvas aos 8:00 no topo." }, { at: 825, t: "Arauto aos 15:00." }, { at: 1110, t: "Barão aos 20:00." }] };
-    EVENTS = { events: [{ name: "DragonKill", time: 312, killer: "a" }], me: { gold: 1250 } };
+    const g0 = DEMO0;
+    EVENTS = { events: [{ name: "DragonKill", time: 312, team: "CHAOS" },
+      { name: "ChampionKill", time: g0 + 4, kc: "Soraka", vc: "Jinx", team: "ORDER", vteam: "CHAOS", meK: true },
+      { name: "ChampionKill", time: g0 + 12, kc: "LeeSin", vc: "Soraka", team: "CHAOS", vteam: "ORDER", meV: true },
+      { name: "ChampionKill", time: g0 + 13, kc: "Ahri", vc: "Caitlyn", team: "CHAOS", vteam: "ORDER" },
+      { name: "DragonKill", time: g0 + 22, team: "CHAOS", dragon: "Fire" }].filter((e) => gameNow() == null || e.time <= gameNow()), me: { gold: 1250 + (gameNow() - g0) * 20 } };
   } else if (RELAY) {
     COACH = RC; EVENTS = RG ? { events: RG.events || [], me: { gold: RG.gold } } : null;
   } else {
@@ -127,6 +148,22 @@ async function pollCoach() {
     try { EVENTS = await (await fetch("/events", { cache: "no-store" })).json(); } catch { EVENTS = null; }
   }
   renderCoach();
+}
+/** Próximo de cada objetivo: quando nasce (ou volta), se está vivo, ou se já sumiu. */
+function objList(g) {
+  const ev = EVENTS?.events || [];
+  const kills = (n) => ev.filter((e) => e.name === n).map((e) => e.time);
+  const teamOf = (name) => ROSTER.find((p) => (p.riotId || "").toLowerCase() === String(name || "").toLowerCase())?.team;
+  const dragons = ev.filter((e) => e.name === "DragonKill");
+  const byTeam = {}; dragons.forEach((d) => { const t = d.team || teamOf(d.killer) || "?"; byTeam[t] = (byTeam[t] || 0) + 1; });
+  const soul = Object.values(byTeam).some((n) => n >= 4);
+  const lastD = dragons.length ? dragons[dragons.length - 1].time : null;
+  const o = (key, name, at, endAt, label) => (endAt != null && g >= endAt ? { key, name, gone: "sumiu" } : { key, name, label, at, live: g >= at });
+  const out = [o("drake", soul ? "Dragão Ancião" : "Dragão", lastD == null ? T.drake : lastD + (soul ? T.elderRe : T.drakeRe), null, soul ? "Dragão Ancião" : `Dragão${dragons.length ? ` (${dragons.length}º feito)` : ""}`)];
+  out.push(kills("HordeKill").length >= 3 ? { key: "grubs", name: "Vastilarvas", gone: "feitas" } : o("grubs", "Vastilarvas", T.grubs, T.grubsEnd));
+  out.push(kills("HeraldKill").length ? { key: "herald", name: "Arauto", gone: "feito" } : o("herald", "Arauto", T.herald, T.heraldEnd));
+  const lb = kills("BaronKill"); out.push(o("baron", "Barão", lb.length ? lb[lb.length - 1] + T.baronRe : T.baron));
+  return out;
 }
 function renderCoach() {
   const el = $("coach"), ob = $("objs"); if (!el || !ob) return;
@@ -149,24 +186,8 @@ function renderCoach() {
     + next.map((x) => `<div class="next"><b>${x.at > g ? fmt(x.at - g) : "agora"}</b><span>${x.t}</span></div>`).join("")
     + itemHtml + `<p class="win">${COACH.win ?? ""}</p>`;
   // objetivos pelos eventos do jogo (os mesmos que aparecem no feed pra todo mundo)
-  const ev = EVENTS?.events || [];
-  const kills = (n) => ev.filter((e) => e.name === n).map((e) => e.time);
-  const teamOf = (name) => ROSTER.find((p) => (p.riotId || "").toLowerCase() === String(name || "").toLowerCase())?.team;
-  const teamOfEv = (e) => e.team || teamOf(e.killer);
-  const dragons = ev.filter((e) => e.name === "DragonKill");
-  const byTeam = {}; dragons.forEach((d) => { const t = teamOfEv(d) || "?"; byTeam[t] = (byTeam[t] || 0) + 1; });
-  const soul = Object.values(byTeam).some((n) => n >= 4);
-  const lastD = dragons.length ? dragons[dragons.length - 1].time : null;
-  const rows = [];
-  const row = (nm, at, endAt) => {
-    if (endAt != null && g >= endAt) return rows.push(`<div class="o"><span>${nm}</span><b class="gone">sumiu</b></div>`);
-    if (at == null) return;
-    rows.push(`<div class="o"><span>${nm}</span><b class="${g >= at ? "live" : ""}">${g >= at ? "vivo" : `em ${fmt(at - g)} (${fmt(at)})`}</b></div>`);
-  };
-  row(soul ? "Dragão Ancião" : `Dragão${dragons.length ? ` (${dragons.length}º feito)` : ""}`, lastD == null ? T.drake : lastD + (soul ? T.elderRe : T.drakeRe));
-  if (kills("HordeKill").length >= 3) rows.push(`<div class="o"><span>Vastilarvas</span><b class="gone">feitas</b></div>`); else row("Vastilarvas", T.grubs, T.grubsEnd);
-  if (kills("HeraldKill").length) rows.push(`<div class="o"><span>Arauto</span><b class="gone">feito</b></div>`); else row("Arauto", T.herald, T.heraldEnd);
-  const lb = kills("BaronKill"); row("Barão", lb.length ? lb[lb.length - 1] + T.baronRe : T.baron);
+  const rows = objList(g).map((o) => o.gone ? `<div class="o"><span>${o.name}</span><b class="gone">${o.gone}</b></div>`
+    : `<div class="o"><span>${o.label || o.name}</span><b class="${o.live ? "live" : ""}">${o.live ? "vivo" : `em ${fmt(o.at - g)} (${fmt(o.at)})`}</b></div>`);
   ob.innerHTML = `<h2>Objetivos</h2>${rows.join("")}<p class="note">Pelos eventos da partida (o mesmo feed que todo mundo vê). Ward 60-90 s antes de cada um.</p>`;
 }
 
@@ -192,7 +213,7 @@ async function poll() {
   if (typeof data.gameTime === "number") clockBase = { game: data.gameTime, at: Date.now() };
   const me = data.players.find((p) => (p.riotId || "").toLowerCase() === (data.me || "").toLowerCase());
   ROSTER = data.players; MEITEMS = (me?.items || []);
-  const mine = me ? me.team : "ORDER";
+  const mine = me ? me.team : "ORDER"; MYTEAM = mine;
   const list = data.players.filter((p) => p.team !== mine);
   for (const p of list) p.ult = await ultCd(champId(p.champ));
   $("st").textContent = demo ? "demonstração" : "em partida";
@@ -290,6 +311,120 @@ function tick() {
     el.querySelector(".cd").textContent = `${Math.floor(left / 60)}:${String(left % 60).padStart(2, "0")}`;
   }
 }
+
+// ---------- coach por voz: fala objetivos, abates, dicas da fase e itens (tudo o que já aparece pra todo mundo no jogo) ----------
+const VKEY = "helporo.voice";
+const MODS = [["obj", "Objetivos"], ["kill", "Abates"], ["tips", "Dicas"], ["items", "Itens"]];
+let VO = { on: false, fun: false, mods: { obj: true, kill: true, tips: true, items: true } };
+try { VO = { ...VO, ...JSON.parse(localStorage.getItem(VKEY) || "{}"), on: false }; } catch {}
+const saveVO = () => { try { localStorage.setItem(VKEY, JSON.stringify(VO)); } catch {} };
+let VOICE = null;
+const pickVoice = () => { const vs = window.speechSynthesis?.getVoices() || []; VOICE = vs.find((v) => /pt[-_]BR/i.test(v.lang)) || vs.find((v) => /^pt/i.test(v.lang)) || null; };
+if (window.speechSynthesis) { pickVoice(); speechSynthesis.onvoiceschanged = pickVoice; }
+const LOG = [];
+function say(text, urgent) {
+  const g = gameNow();
+  LOG.unshift(`<li><b>${g != null ? fmt(g) : ""}</b>${text}</li>`); LOG.length = Math.min(LOG.length, 5);
+  $("vlog").innerHTML = LOG.join("");
+  if (!VO.on || !window.speechSynthesis) return;
+  const u = new SpeechSynthesisUtterance(text.replace(/<[^>]+>/g, ""));
+  u.lang = "pt-BR"; if (VOICE) u.voice = VOICE; u.rate = 1.07;
+  if (urgent) speechSynthesis.cancel();
+  speechSynthesis.speak(u);
+}
+const pick = (a) => a[Math.floor(Math.random() * a.length)];
+const P = (serious, fun) => (VO.fun ? pick(fun) : serious);
+const cname = (raw) => { const id = champId(raw); return CHAMPS[id]?.name || id || "alguém"; };
+const DRAKE = { Fire: "infernal", Water: "do oceano", Earth: "da montanha", Air: "das nuvens", Hextech: "hextec", Chemtech: "quimtec", Elder: "Ancião" };
+const MULTI = { 2: "double kill", 3: "triple kill", 4: "quadra kill", 5: "penta kill" };
+const SAID = new Set(); let SEEN = null, lastPhase = null;
+const once = (k) => (SAID.has(k) ? false : (SAID.add(k), true));
+const inWords = (s) => (s >= 55 ? "um minuto" : `${Math.round(s / 10) * 10} segundos`);
+
+function renderVoice() {
+  const b = $("vbtn"); b.classList.toggle("on", VO.on);
+  b.textContent = VO.on ? "🔊 Voz ligada (toque pra desligar)" : "🔇 Ligar o coach por voz";
+  document.querySelectorAll(".seg button").forEach((x) => x.classList.toggle("on", +x.dataset.mode === (VO.fun ? 1 : 0)));
+  $("vmods").innerHTML = MODS.map(([k, l]) => `<button type="button" data-k="${k}" class="${VO.mods[k] ? "on" : ""}">${l}</button>`).join("");
+  $("vmods").querySelectorAll("button").forEach((x) => (x.onclick = () => { VO.mods[x.dataset.k] = !VO.mods[x.dataset.k]; saveVO(); renderVoice(); }));
+}
+$("vbtn").onclick = () => {
+  VO.on = !VO.on; saveVO(); renderVoice();
+  if (VO.on) { pickVoice(); say(P("Coach por voz ligado.", ["Bora! Coach ligado.", "Tô contigo. Coach ligado."]), true); navigator.wakeLock?.request("screen").catch(() => {}); }
+  else window.speechSynthesis?.cancel();
+};
+document.querySelectorAll(".seg button").forEach((x) => (x.onclick = () => { VO.fun = x.dataset.mode === "1"; saveVO(); renderVoice(); }));
+renderVoice();
+
+function announce() {
+  const g = gameNow(); if (g == null) { SEEN = null; return; }
+  const myTeam = MYTEAM;
+  const ours = (t) => t && t === myTeam;
+  const ev = EVENTS?.events || [];
+  const key = (e) => `${e.name}|${Math.round(e.time)}|${e.vc || ""}`;
+  // ao abrir a página no meio da partida, não lê o que já passou
+  if (!SEEN) { SEEN = new Set(ev.filter((e) => e.time < g - 25).map(key)); }
+  const fresh = ev.filter((e) => !SEEN.has(key(e))); fresh.forEach((e) => SEEN.add(key(e)));
+  const objs = objList(g);
+  const up = (nm) => objs.find((o) => o.key === nm && o.live);
+
+  // abates: junta os da mesma luta numa frase só
+  if (VO.mods.kill) {
+    const ks = fresh.filter((e) => e.name === "ChampionKill");
+    const meV = ks.find((e) => e.meV), meK = ks.filter((e) => e.meK), meA = ks.filter((e) => e.meA && !e.meK);
+    const allyDown = ks.filter((e) => !e.meV && ours(e.vteam)).map((e) => cname(e.vc));
+    const enemyDown = ks.filter((e) => !e.meK && !e.meA && e.vteam && !ours(e.vteam)).map((e) => cname(e.vc));
+    const parts = [];
+    if (meK.length) parts.push(P(`Você abateu ${meK.map((e) => cname(e.vc)).join(" e ")}.`, [`Pegou ${meK.map((e) => cname(e.vc)).join(" e ")}! Que isso!`, `${meK.map((e) => cname(e.vc)).join(" e ")} foi pro cinza. Lindo.`]));
+    if (meA.length) parts.push(P(`Assistência em ${meA.map((e) => cname(e.vc)).join(" e ")}.`, [`Assistência em ${meA.map((e) => cname(e.vc)).join(" e ")}. Trabalho em equipe!`]));
+    if (meV) parts.push(P(`Você morreu para ${cname(meV.kc)}.`, [`${cname(meV.kc)} te pegou. Faz parte, respira.`, `Morreu pro ${cname(meV.kc)}. Cinza também é uma cor.`]));
+    if (enemyDown.length) parts.push(`${enemyDown.join(" e ")} ${enemyDown.length > 1 ? "abatidos" : "abatido"}.`);
+    if (allyDown.length) parts.push(`${allyDown.join(" e ")} ${allyDown.length > 1 ? "caíram" : "caiu"}.`);
+    if (parts.length) say(parts.join(" "), !!meV);
+    if (meV && VO.mods.tips) { // dica enquanto espera o respawn
+      const ph = g < 14 * 60 ? "lane" : g < 25 * 60 ? "mid" : "late";
+      const tip = (COACH?.phases || []).find((p) => p.key === ph)?.tips?.find((t) => t.kind === "avoid") || null;
+      if (tip) say(`Enquanto volta: ${tip.t}`);
+    }
+    for (const e of fresh.filter((x) => x.name === "Multikill" && MULTI[x.streak])) say(`${cname(e.kc)}: ${MULTI[e.streak]}${ours(e.team) ? "!" : ". Cuidado."}`);
+    for (const e of fresh.filter((x) => x.name === "Ace")) {
+      if (ours(e.acing)) { const tgt = up("baron") ? "vá pro Barão" : up("drake") ? "vá pro dragão" : "empurre uma torre"; say(P(`Ace! O time deles está todo morto: ${tgt}.`, [`ACE! Todo mundo deles no cinza, ${tgt}!`]), true); }
+      else say(P("Vocês levaram ace. Segurem perto da torre até voltarem.", ["Ace pra eles. Respira, defende na torre e recomeça."]), true);
+    }
+  }
+  // objetivos: quem pegou e quando volta
+  if (VO.mods.obj) {
+    for (const e of fresh) {
+      const mine = ours(e.team), stolen = e.stolen === "True" || e.stolen === true ? " roubado" : "";
+      if (e.name === "DragonKill") say(mine ? P(`Seu time pegou o dragão ${DRAKE[e.dragon] || ""}${stolen}.`, [`Dragão ${DRAKE[e.dragon] || ""} nosso${stolen}! Boa!`]) : `Eles pegaram o dragão ${DRAKE[e.dragon] || ""}${stolen}. O próximo nasce em ${e.dragon === "Elder" ? 6 : 5} minutos.`, true);
+      else if (e.name === "BaronKill") say(mine ? P("Barão é de vocês. Agrupem e empurrem com o buff.", ["Barão nosso! Agora é empurrar junto, sem ninguém sozinho."]) : P("Eles pegaram o Barão. Fiquem juntos e defendam: não lutem fora da torre nos próximos 3 minutos.", ["Barão deles. Paciência: defende junto na torre e espera o buff acabar."]), true);
+      else if (e.name === "HeraldKill") say(mine ? "Arauto de vocês." : "Eles pegaram o Arauto: cuidado com a torre que ele vai bater.");
+      else if (e.name === "HordeKill" && once(`horde-${e.team}-${Math.floor(e.time / 60)}`)) say(mine ? "Vastilarvas pra vocês." : "Eles fizeram vastilarvas.");
+      else if (e.name === "InhibKilled") say(mine ? "Inibidor deles caiu." : "Caiu um inibidor de vocês. Limpem as super tropas.");
+    }
+    for (const o of objs) {
+      if (o.at == null || o.gone) continue;
+      const left = o.at - g;
+      if (left <= 60 && left > 50 && once(`${o.key}-${o.at}-60`)) say(`${o.name} em um minuto. ${o.key === "baron" || o.key === "drake" ? "Visão no rio agora." : ""}`);
+      if (left <= 0 && left > -8 && once(`${o.key}-${o.at}-0`)) say(`${o.name} nasceu.`);
+    }
+  }
+  // dicas: a linha do tempo do coach e a dica da fase quando ela muda
+  if (VO.mods.tips && COACH) {
+    for (const x of COACH.timeline || []) if (g >= x.at && g < x.at + 10 && once(`tl-${x.at}`)) say(x.t);
+    const ph = g < 14 * 60 ? "lane" : g < 25 * 60 ? "mid" : "late";
+    if (ph !== lastPhase) {
+      if (lastPhase !== null) { const t = (COACH.phases || []).find((p) => p.key === ph)?.tips?.[0]; if (t) say(`${ph === "mid" ? "Meio de jogo" : "Fim de jogo"}. ${t.t}`); }
+      lastPhase = ph;
+    }
+  }
+  // item: avisa uma vez quando o ouro já paga o próximo item da build
+  if (VO.mods.items && COACH) {
+    const gold = EVENTS?.me?.gold, need = (COACH.items || []).find((id) => !MEITEMS.includes(id) && ITEMS[id]);
+    if (need && typeof gold === "number" && gold >= (ITEMS[need].gold?.total ?? 1e9) && once(`item-${need}`)) say(P(`Já dá pra comprar ${ITEMS[need].name}. Volte quando a wave deixar.`, [`Dinheiro na mão: ${ITEMS[need].name} tá liberado!`]));
+  }
+}
+setInterval(announce, 1000);
 setInterval(tick, 250);
 boot();
 </script>

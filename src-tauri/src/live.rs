@@ -53,17 +53,40 @@ pub(crate) fn players() -> serde_json::Value {
 /// Tudo isso aparece pra todo mundo no jogo; vem da mesma API local da partida.
 pub(crate) fn events() -> serde_json::Value {
     let Some(ev) = live("eventdata") else { return serde_json::json!({ "inGame": false }) };
-    let keep = ["DragonKill", "HeraldKill", "BaronKill", "HordeKill", "TurretKilled", "InhibKilled", "FirstBrick", "GameStart"];
+    let keep = ["DragonKill", "HeraldKill", "BaronKill", "HordeKill", "TurretKilled", "InhibKilled", "FirstBrick", "GameStart",
+        "ChampionKill", "Multikill", "Ace", "FirstBlood"];
+    // nomes do feed de abates -> campeão e time (o feed usa o nome de jogo, às vezes sem a #tag)
+    let me_name = live("activeplayername").and_then(|v| v.as_str().map(|s| s.to_lowercase())).unwrap_or_default();
+    let roster = live("playerlist").and_then(|v| v.as_array().cloned()).unwrap_or_default();
+    let norm = |s: &str| s.split('#').next().unwrap_or("").trim().to_lowercase();
+    let find = |name: &str| -> Option<serde_json::Value> {
+        if name.is_empty() { return None; }
+        let n = norm(name);
+        roster.iter().find(|p| {
+            ["riotId", "riotIdGameName", "summonerName"].iter().any(|k| p.get(*k).and_then(|v| v.as_str()).map_or(false, |v| norm(v) == n))
+        }).cloned()
+    };
+    let champ = |name: &str| find(name).and_then(|p| p.get("rawChampionName").cloned());
+    let team = |name: &str| find(name).and_then(|p| p.get("team").cloned());
+    let is_me = |name: &str| !name.is_empty() && norm(name) == norm(&me_name);
     let list: Vec<_> = ev
         .get("Events")
         .and_then(|e| e.as_array())
         .map(|a| {
             a.iter()
                 .filter(|e| e.get("EventName").and_then(|n| n.as_str()).map_or(false, |n| keep.contains(&n)))
-                .map(|e| serde_json::json!({
-                    "name": e.get("EventName"), "time": e.get("EventTime"),
-                    "dragon": e.get("DragonType"), "killer": e.get("KillerName"),
-                }))
+                .map(|e| {
+                    let s = |k: &str| e.get(k).and_then(|v| v.as_str()).unwrap_or("").to_string();
+                    let (killer, victim) = (s("KillerName"), s("VictimName"));
+                    let assisters: Vec<String> = e.get("Assisters").and_then(|a| a.as_array()).map(|a| a.iter().filter_map(|x| x.as_str().map(String::from)).collect()).unwrap_or_default();
+                    serde_json::json!({
+                        "name": e.get("EventName"), "time": e.get("EventTime"),
+                        "dragon": e.get("DragonType"), "killer": killer,
+                        "kc": champ(&killer), "team": team(&killer), "vc": champ(&victim), "vteam": team(&victim),
+                        "meK": is_me(&killer), "meV": is_me(&victim), "meA": assisters.iter().any(|a| is_me(a)),
+                        "streak": e.get("KillStreak"), "acing": e.get("AcingTeam"), "stolen": e.get("Stolen"),
+                    })
+                })
                 .collect()
         })
         .unwrap_or_default();
