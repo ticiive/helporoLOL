@@ -1,0 +1,46 @@
+name: Já joguei com esse jogador?
+
+# Cruza as suas partidas da temporada com as de outro jogador. Rode em Actions -> Run workflow e
+# digite o Riot ID (nome#tag). O resultado fica em busca/resultado.json na branch "busca".
+on:
+  workflow_dispatch:
+    inputs:
+      jogador:
+        description: "Riot ID do jogador (nome#tag)"
+        required: true
+  push:
+    branches: [main]
+    paths: ["model/busca.txt"]
+
+permissions:
+  contents: write
+
+jobs:
+  busca:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Cruza as partidas
+        env:
+          RIOT_API_KEY: ${{ secrets.RIOT_API_KEY }}
+          JOGADOR: ${{ github.event.inputs.jogador }}
+        run: |
+          J="${JOGADOR:-$(head -n1 model/busca.txt)}"
+          python model/played_with.py "ticiive#lett" "$J" out/busca/resultado.json
+          cat out/busca/resultado.json >> "$GITHUB_STEP_SUMMARY"
+      - name: Publica na branch busca
+        run: |
+          set -e
+          D=$(mktemp -d)
+          cp -r out/busca "$D/busca"
+          cd "$D"
+          git init -q -b busca
+          git config user.name "helporoLOL bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add -A
+          git commit -qm "Busca $(date -u +%FT%H:%M)"
+          git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" busca
