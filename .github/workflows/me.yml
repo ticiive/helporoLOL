@@ -1,0 +1,50 @@
+name: Minhas partidas (pós-jogo sem o cliente)
+
+# Busca as suas últimas ranqueadas pela API da Riot e publica na branch "me" (de hora em hora).
+on:
+  schedule:
+    - cron: "23 * * * *"
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ["model/my_matches.py", ".github/workflows/me.yml"]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: me
+  cancel-in-progress: false
+
+jobs:
+  partidas:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Recupera as partidas já baixadas
+        run: |
+          mkdir -p out/me
+          if git ls-remote --exit-code origin me >/dev/null; then
+            git fetch --depth 1 origin me
+            git archive FETCH_HEAD me | tar -x -C out || true
+          fi
+      - name: Busca as novas
+        env:
+          RIOT_API_KEY: ${{ secrets.RIOT_API_KEY }}
+        run: python model/my_matches.py ticiive lett out/me 20
+      - name: Publica na branch me
+        run: |
+          set -e
+          D=$(mktemp -d)
+          cp -r out/me "$D/me"
+          cd "$D"
+          git init -q -b me
+          git config user.name "helporoLOL bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add -A
+          git commit -qm "Partidas $(date -u +%FT%H:%M)"
+          git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" me

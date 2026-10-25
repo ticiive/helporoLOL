@@ -8,6 +8,7 @@ import { analyze, pattern, type Review } from "../lib/review";
 import { demoGame, demoTimeline } from "../lib/reviewDemo";
 import { MiniMap } from "./MiniMap";
 import { Reasons } from "./Reasons";
+import { remoteGames, remoteMatch } from "../lib/remote";
 
 /** Métricas comparadas com a média Mestre+/D1 BR do mesmo campeão na mesma rota. */
 const METRICS: { k: string; label: string; better: 1 | -1; of: (g: Game) => number | null; fmt: (v: number) => string; roles?: string[] }[] = [
@@ -24,29 +25,35 @@ const toCache = (r: Review) => { try { localStorage.setItem(cacheKey(r.gameId), 
 
 async function loadReview(g: Game, cat: Catalog, me: { gameName?: string }, bench: Bench | null): Promise<Review | null> {
   const c = fromCache(g.id); if (c) return c;
-  if (!inTauri()) return null;
-  const [game, tl] = await Promise.all([invoke("match_game", { gameId: g.id }), invoke("match_timeline", { gameId: g.id })]);
-  const r = analyze(game, tl, cat, { gameName: me.gameName, champ: g.champ }, bench, g.role);
+  let game: unknown = null, tl: unknown = null;
+  if (inTauri()) { try { [game, tl] = await Promise.all([invoke("match_game", { gameId: g.id }), invoke("match_timeline", { gameId: g.id })]); } catch { /* sem cliente */ } }
+  if (!game || !tl) { const m = await remoteMatch(g.id); if (m) { game = m.game; tl = m.timeline; } }
+  if (!game || !tl) return null;
+  const r = analyze(game, tl, cat, { gameName: me.gameName ?? "ticiive", champ: g.champ }, bench, g.role);
   if (r) toCache(r);
   return r;
 }
 
-export function PostGame({ games, bench, cat, gameName }: { games: Game[]; bench: Bench | null; cat: Catalog; gameName?: string }) {
+export function PostGame({ games: local, bench, cat, gameName }: { games: Game[]; bench: Bench | null; cat: Catalog; gameName?: string }) {
+  const [remote, setRemote] = useState<{ games: Game[]; at: number } | null>(null);
+  useEffect(() => { if (cat.byKey.size) remoteGames(cat).then(setRemote); }, [cat.version, cat.byKey.size]);
+  const fromApi = local.length === 0 && !!remote?.games.length;
+  const games = fromApi ? remote!.games : local;
   const recent = [...games].filter((g) => g.min === undefined || g.min >= 15).sort((a, b) => b.t - a.t).slice(0, 10);
   const [sel, setSel] = useState<number | null>(null);
   const [rev, setRev] = useState<Review | null>(null);
   const [msg, setMsg] = useState("");
   const [pat, setPat] = useState<ReturnType<typeof pattern>>(null);
   const g = recent.find((x) => x.id === sel) ?? recent[0];
-  const demo = !inTauri();
+  const demo = games.length === 0 && !inTauri();
 
   useEffect(() => {
     setRev(null); setMsg("");
     if (demo) { setRev(analyze(demoGame(), demoTimeline(), cat, { gameName: "ticiive" }, bench, "sup")); return; }
     if (!g) return;
-    setMsg("Lendo a partida no cliente…");
-    loadReview(g, cat, { gameName }, bench).then((r) => { setRev(r); setMsg(r ? "" : "O cliente não devolveu a timeline dessa partida."); }).catch(() => setMsg("Abra o cliente do LoL pra ler a partida."));
-  }, [g?.id, cat.version, bench, demo]);
+    setMsg(fromApi ? "Lendo a partida…" : "Lendo a partida no cliente…");
+    loadReview(g, cat, { gameName }, bench).then((r) => { setRev(r); setMsg(r ? "" : "Não achei a timeline dessa partida."); }).catch(() => setMsg("Não deu pra ler a partida."));
+  }, [g?.id, cat.version, bench, demo, fromApi]);
 
   const analyzeAll = async () => {
     setMsg("Analisando as últimas partidas…");
@@ -65,6 +72,7 @@ export function PostGame({ games, bench, cat, gameName }: { games: Game[]; bench
   return (
     <section className="plan postgame">
       <h2>Revisão pós-jogo</h2>
+      {fromApi && remote && <p className="note">Partidas pela API da Riot (sem o cliente do LoL), atualizadas de hora em hora. Última busca: {new Date(remote.at).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}.</p>}
       {demo ? <p className="note">Prévia com uma partida de exemplo. No app, ele lê as suas partidas direto do cliente.</p> : (
         <div className="brow">
           <select value={g?.id} onChange={(e) => setSel(+e.target.value)} aria-label="Partida">
