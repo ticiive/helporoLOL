@@ -9,7 +9,7 @@ RANKED = {420, 440}
 
 def get(url, tries=6):
     for _ in range(tries):
-        req = urllib.request.Request(url, headers={"X-Riot-Token": KEY})
+        req = urllib.request.Request(url, headers={"X-Riot-Token": KEY, "User-Agent": "helporoLOL-me"})
         try:
             with urllib.request.urlopen(req, timeout=20) as r:
                 return json.load(r)
