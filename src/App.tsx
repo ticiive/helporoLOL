@@ -156,7 +156,11 @@ export default function App() {
   }, [live, syncHistory]);
 
   const following = ui.follow && live?.status === "active";
-  const myRole: Role = following && live?.status === "active" && live.draft.myRole ? live.draft.myRole : ui.role;
+  // o que você travou na seleção: a seleção some quando a partida carrega, e o coach tem que continuar no seu campeão
+  const [lastSel, setLastSel] = useState<{ role: Role | null; pick: string | null }>({ role: null, pick: null });
+  useEffect(() => { if (following && live?.status === "active") setLastSel({ role: live.draft.myRole ?? null, pick: live.draft.myHover ?? null }); }, [following, live]);
+  const afterSel = !following && ui.follow && !!lastSel.pick && (phase === "InProgress" || phase === "GameStart" || phase === "EndOfGame" || phase === "WaitingForStats" || phase === "PreEndOfGame");
+  const myRole: Role = following && live?.status === "active" && live.draft.myRole ? live.draft.myRole : afterSel && lastSel.role ? lastSel.role : ui.role;
   useEffect(() => {
     if (following && live?.status === "active") setDraft({ ally: live.draft.ally, enemy: live.draft.enemy, bans: live.draft.bans });
   }, [following, live]);
@@ -176,7 +180,7 @@ export default function App() {
   const enemies = ROLES.map((r) => draft.enemy[r]).filter(Boolean) as string[];
   const top = results[0]?.status === "ok" ? results[0] : null;
   // o seu pick de verdade (hover ou travado no cliente; à mão no modo manual). A recomendação não muda com ele.
-  const myPick = following && live?.status === "active" ? live.draft.myHover : draft.ally[myRole];
+  const myPick = following && live?.status === "active" ? live.draft.myHover : afterSel ? lastSel.pick : draft.ally[myRole];
   // recomendação nova: só dados, em cards com tier (a antiga fica no "ranking detalhado")
   const cards = useMemo(() => { try { return draftCards({ role: myRole, draft: draftForMe, flags, counters, synergies, scaling, pool: settings.pool[myRole] ?? [], stats, exclude: settings.exclude?.[myRole] ?? [], main: myRole === "sup" ? settings.main : undefined, mainAvoid: settings.mainAvoid }); } catch { return []; } },
     [myRole, draftForMe, flags, counters, synergies, scaling, settings.pool, settings.exclude, settings.main, settings.mainAvoid, stats, laneVer]);

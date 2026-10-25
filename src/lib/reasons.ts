@@ -183,7 +183,17 @@ export function reasons(game: any, tl: any, cat: Catalog, idMe: number, bench: B
   const cw = st.visionWardsBoughtInGame;
   if (myRole === "sup" && typeof cw === "number" && (10 * cw) / min < 0.7) push({ id: "control", scope: "voce", good: false, weight: 4, title: "Poucas wards de controle", detail: `${cw} na partida; o ideal no sup é comprar a cada volta (uns ${Math.round(min / 8)} numa partida de ${Math.round(min)} min).` });
   const myDmg = st.totalDamageDealtToChampions ?? 0, teamDmg = parts.filter((p) => p.teamId === myTeam).reduce((s, p) => s + (p.stats?.totalDamageDealtToChampions ?? 0), 0);
-  if ((myRole === "mid" || myRole === "adc") && teamDmg && myDmg / teamDmg < 0.18) push({ id: "dmg", scope: "voce", good: false, weight: 4, title: "Pouco dano pra sua rota", detail: `${Math.round((100 * myDmg) / teamDmg)}% do dano do time.` });
+  // dano em campeões por minuto contra a média Mestre+/D1 BR do mesmo campeão na mesma rota
+  const dpm = myDmg / min, share = teamDmg ? Math.round((100 * myDmg) / teamDmg) : null;
+  const enchanter = myRole === "sup" && ["Soraka", "Sona", "Nami", "Janna", "Lulu", "Milio", "Yuumi", "Karma", "Seraphine", "Renata Glasc", "Taric"].includes(name(idMe));
+  if (ref?.dmg && myDmg > 0) {
+    const [m, sd] = ref.dmg, z = sd > 0 ? (dpm - m) / sd : 0, pct = Math.round((100 * (dpm - m)) / m);
+    const base = `${Math.round(dpm)} de dano por minuto${share !== null ? ` (${share}% do time)` : ""}; a média Mestre+ de ${name(idMe)} ${RN[myRole]} é ${Math.round(m)}`;
+    if (z <= -0.6) push({ id: "dmg", scope: "voce", good: false, weight: enchanter ? 2 : myRole === "mid" || myRole === "adc" ? 6 : 4,
+      title: "Dano abaixo da média", detail: `${base} (${pct}%).${enchanter ? " Na sua champ o dano pesa menos que cura e peel, mas pouco dano costuma vir de pouco tempo vivo na luta ou de não usar a poke na lane." : " Veja se foi tempo morto, farm atrasado ou ficar longe das lutas."}` });
+    else if (z >= 0.6) push({ id: "dmg", scope: "voce", good: true, weight: 3, title: "Dano acima da média", detail: `${base} (+${pct}%).` });
+    else push({ id: "dmg", scope: "voce", good: true, weight: 1, title: "Dano dentro da média", detail: `${base}. Não foi o dano.` });
+  } else if ((myRole === "mid" || myRole === "adc") && share !== null && share < 18) push({ id: "dmg", scope: "voce", good: false, weight: 4, title: "Pouco dano pra sua rota", detail: `${share}% do dano do time (sem média Mestre+ desse campeão ainda).` });
   const cs = (st.totalMinionsKilled ?? 0) + (st.neutralMinionsKilled ?? 0);
   if (myRole !== "sup" && ref?.cs && cs / min < ref.cs[0] - 0.8) push({ id: "cs", scope: "voce", good: false, weight: 4, title: "Farm baixo", detail: `${br(cs / min, 1)} CS/min; a média Mestre+ é ${br(ref.cs[0], 1)}.` });
   const opp = opponent(idMe);

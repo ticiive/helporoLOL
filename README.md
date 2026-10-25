@@ -69,6 +69,13 @@ model/                    coleta (Riot API), treino, builds, lane, scaling, méd
 4. Siga o instalador (não precisa de administrador; instala só pro seu usuário).
 5. Se aparecer um aviso do **WebView2**, aceite: é o componente da Microsoft que desenha a janela do app (o Windows 10 e 11 normalmente já têm).
 
+### No Mac
+
+1. No mesmo link, baixe o arquivo que termina em **`_universal.dmg`** (funciona em Mac Intel e Apple Silicon).
+2. Abra o .dmg e arraste o helporoLOL pra pasta **Aplicativos**.
+3. Como o app não tem assinatura paga da Apple, o Mac bloqueia na primeira vez. Abra o **Terminal** e rode `xattr -dr com.apple.quarantine /Applications/helporoLOL.app`; depois abra normalmente. (Ou: tente abrir, vá em **Ajustes do Sistema → Privacidade e Segurança** e clique em **Abrir Mesmo Assim**.)
+4. Precisa do cliente do LoL aberto e logado no mesmo Mac: é dele que o app lê a seleção e o histórico.
+
 **Usando:** abra o helporoLOL antes de entrar na fila. Quando a seleção de campeões começar, o draft preenche sozinho e a sugestão aparece no meio. O histórico das suas partidas sincroniza sozinho enquanto o app estiver aberto.
 
 **Firewall:** na primeira vez o Windows pergunta se o helporoLOL pode usar a rede. Marque **Redes privadas** e permita; é isso que deixa o timer abrir no Mac ou no celular.

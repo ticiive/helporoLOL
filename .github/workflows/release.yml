@@ -1,4 +1,4 @@
-name: Build do app (Windows)
+name: Build do app (Windows e Mac)
 
 # Roda quando você cria uma tag v* (ex.: v0.1.0) ou manualmente pela aba Actions.
 on:
@@ -35,7 +35,41 @@ jobs:
         with:
           tagName: ${{ github.ref_type == 'tag' && github.ref_name || format('build-{0}', github.run_number) }}
           releaseName: helporoLOL ${{ github.ref_type == 'tag' && github.ref_name || format('build {0}', github.run_number) }}
-          releaseBody: Baixe o instalador `_x64-setup.exe` abaixo. Primeira abertura no Windows, veja o README.
+          releaseBody: Windows, baixe o `_x64-setup.exe`. Mac, baixe o `_universal.dmg` (primeira abertura, veja o README).
           releaseDraft: false
           prerelease: false
           includeUpdaterJson: true
+
+  # Mac (Intel e Apple Silicon num app só). Roda depois do Windows pra não brigar pela mesma release.
+  build-macos:
+    needs: build-windows
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      - run: npm ci
+      - name: Chave pública do atualizador
+        shell: bash
+        run: node -e "const fs=require('fs');const f='src-tauri/tauri.conf.json';const c=JSON.parse(fs.readFileSync(f,'utf8'));c.plugins.updater.pubkey=fs.readFileSync('src-tauri/updater.key.pub','utf8').trim();fs.writeFileSync(f,JSON.stringify(c,null,2))"
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          tagName: ${{ github.ref_type == 'tag' && github.ref_name || format('build-{0}', github.run_number) }}
+          releaseName: helporoLOL ${{ github.ref_type == 'tag' && github.ref_name || format('build {0}', github.run_number) }}
+          releaseBody: Windows, baixe o `_x64-setup.exe`. Mac, baixe o `_universal.dmg` (primeira abertura, veja o README).
+          releaseDraft: false
+          prerelease: false
+          includeUpdaterJson: true
+          args: --target universal-apple-darwin
