@@ -7,6 +7,7 @@ import { inTauri } from "../lib/lcu";
 import { analyze, pattern, type Review } from "../lib/review";
 import { demoGame, demoTimeline } from "../lib/reviewDemo";
 import { MiniMap } from "./MiniMap";
+import { Reasons } from "./Reasons";
 
 /** Métricas comparadas com a média Mestre+/D1 BR do mesmo campeão na mesma rota. */
 const METRICS: { k: string; label: string; better: 1 | -1; of: (g: Game) => number | null; fmt: (v: number) => string; roles?: string[] }[] = [
@@ -17,7 +18,7 @@ const METRICS: { k: string; label: string; better: 1 | -1; of: (g: Game) => numb
   { k: "dmg", label: "Dano em campeões por min", better: 1, of: (g) => (g.s && g.min ? g.s.dmg / g.min : null), fmt: (v) => Math.round(v).toString() },
 ];
 const mmss = (t: number) => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, "0")}`;
-const cacheKey = (id: number) => `helporo.rev3.${id}`;
+const cacheKey = (id: number) => `helporo.rev4.${id}`;
 const fromCache = (id: number): Review | null => { try { return JSON.parse(localStorage.getItem(cacheKey(id)) || "null"); } catch { return null; } };
 const toCache = (r: Review) => { try { localStorage.setItem(cacheKey(r.gameId), JSON.stringify(r)); } catch { /* cheio */ } };
 
@@ -77,7 +78,8 @@ export function PostGame({ games, bench, cat, gameName }: { games: Game[]; bench
       {rev && (
         <div className="review">
           <div>
-            {rev.focus && <div className="train"><b>Treine isto: {rev.focus.title}</b><p>{rev.focus.text}</p></div>}
+            {rev.reasons && <Reasons rev={rev} />}
+            {rev.focus && <div className="train" style={{ marginTop: 12 }}><b>Treine isto: {rev.focus.title}</b><p>{rev.focus.text}</p></div>}
             <div className="lbl" style={{ marginTop: 10 }}>Feedback desta partida</div>
             <p className="story">{rev.story || "Partida sem nada fora do comum."}</p>
             <p className="note">{rev.champ} · {rev.win ? "vitória" : "derrota"} · {Math.round(rev.min)} min · {rev.k}/{rev.d}/{rev.a} · KP {Math.round(rev.kp * 100)}%

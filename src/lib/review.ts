@@ -5,6 +5,7 @@
  */
 import type { Catalog } from "./ddragon";
 import type { Bench } from "./builds";
+import { reasons, type Reason } from "./reasons";
 
 export interface Pos { x: number; y: number }
 export interface Kill { t: number; killer: number; victim: number; assists: number[]; pos: Pos }
@@ -19,6 +20,7 @@ export interface Review {
   lane: { gd10: number | null; gd15: number | null }; vision: { wards: number; control: number; clears: number; noSetup: number; objectives: number };
   focus: { key: FocusKey; title: string; text: string } | null;
   story: string;
+  reasons: Reason[];
 }
 export type Zone = "baseAlly" | "baseEnemy" | "top" | "mid" | "bot" | "riverTop" | "riverBot" | "jungleAlly" | "jungleEnemy";
 export type FocusKey = "mapa" | "objetivo" | "lane" | "luta" | "visao";
@@ -151,6 +153,7 @@ export function analyze(game: any, tl: any, cat: Catalog, me: { gameName?: strin
   if (bad.length) parts1.push(`Ponto a melhorar: ${bad.join("; ")}.`);
   if (focus && ROLE_TIP[role ?? ""]) parts1.push(ROLE_TIP[role ?? ""]!(focus.key));
   return { gameId: game.gameId, champ, role, win: !!st.win, min, k, d, a, kp, teamKills, players, frames, kills, objs, deaths, good, bad, focus, story: parts1.join(" "),
+    reasons: (() => { try { return reasons(game, tl, cat, idMe!, bench, role); } catch { return []; } })(),
     lane: { gd10, gd15 }, vision: { wards: myWards.length, control: ctl, clears: myClears.length, noSetup: noSetup.length, objectives: objs.length } };
 }
 
