@@ -1,0 +1,45 @@
+name: Comparar meu sup com outro jogador
+
+# Compara as suas últimas partidas de sup na solo/duo com as de outro jogador (média de cada métrica).
+# Run workflow e digite o Riot ID, ou edite model/compara.txt. Resultado na branch "compara".
+on:
+  workflow_dispatch:
+    inputs:
+      jogador:
+        description: "Riot ID do jogador (nome#tag)"
+        required: true
+  push:
+    branches: [main]
+    paths: ["model/compara.txt", "model/compare.py"]
+
+permissions:
+  contents: write
+
+jobs:
+  compara:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Compara
+        env:
+          RIOT_API_KEY: ${{ secrets.RIOT_API_KEY }}
+          JOGADOR: ${{ github.event.inputs.jogador }}
+        run: |
+          J="${JOGADOR:-$(head -n1 model/compara.txt)}"
+          python model/compare.py "ticiive#lett" "$J" out/compara/resultado.json 40
+      - name: Publica na branch compara
+        run: |
+          set -e
+          D=$(mktemp -d)
+          cp -r out/compara "$D/compara"
+          cd "$D"
+          git init -q -b compara
+          git config user.name "helporoLOL bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add -A
+          git commit -qm "Comparação $(date -u +%FT%H:%M)"
+          git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" compara
