@@ -1,0 +1,30 @@
+name: Wards de partidas (pra revisão de vídeo)
+on:
+  push:
+    branches: [main]
+    paths: ["model/wards.txt", "model/wards.py"]
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  wards:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Busca
+        env:
+          RIOT_API_KEY: ${{ secrets.RIOT_API_KEY }}
+        run: |
+          mkdir -p out/wards
+          xargs -d '\n' -a model/wards.txt python model/wards.py out/wards/resultado.json
+      - name: Publica na branch wards
+        run: |
+          set -e
+          D=$(mktemp -d); cp -r out/wards "$D/wards"; cd "$D"
+          git init -q -b wards; git config user.name "helporoLOL bot"; git config user.email "actions@users.noreply.github.com"
+          git add -A; git commit -qm "Wards $(date -u +%FT%H:%M)"
+          git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" wards
