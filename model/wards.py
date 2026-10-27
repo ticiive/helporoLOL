@@ -1,4 +1,4 @@
-"""Wards de um jogador numa partida (tipo e minuto), pra achar no vídeo. Uso: python model/wards.py BR1_123 "nome#tag" ... out.json"""
+"""Wards de um jogador numa partida (tipo e minuto), pra achar no vídeo. Uso: python model/wards.py out.json BR1_123 "nome#tag" ..."""
 import json, os, sys, time, urllib.parse, urllib.request, urllib.error
 KEY = os.environ["RIOT_API_KEY"]; REG = "https://americas.api.riotgames.com"
 def get(url):
@@ -10,7 +10,7 @@ def get(url):
             if e.code == 429 or e.code >= 500: time.sleep(int(e.headers.get("Retry-After") or 5) + 1); continue
             raise
 out = {}
-args = sys.argv[1:-1]
+outp, args = sys.argv[1], sys.argv[2:]
 for i in range(0, len(args), 2):
     mid, rid = args[i], args[i + 1]
     name, tag = rid.rsplit("#", 1)
@@ -28,5 +28,5 @@ for i in range(0, len(args), 2):
     out[mid] = {"who": rid, "team": me["teamId"], "champ": me["championName"], "champs": champs,
                 "stats": {k: me.get(k) for k in ("wardsPlaced", "wardsKilled", "visionWardsBoughtInGame", "visionScore", "detectorWardsPlaced")},
                 "events": ev}
-json.dump(out, open(sys.argv[-1], "w"), ensure_ascii=False, indent=0)
+json.dump(out, open(outp, "w"), ensure_ascii=False, indent=0)
 print(json.dumps({k: v["stats"] for k, v in out.items()}))
