@@ -21,12 +21,13 @@ for i in range(0, len(args), 2):
     ev = []
     for f in t["info"]["frames"]:
         for e in f.get("events", []):
-            if e["type"] == "WARD_PLACED" and e.get("creatorId") == pid: ev.append(["ward", e["timestamp"] // 1000, e.get("wardType")])
+            if e["type"] == "CHAMPION_KILL" and pid in [e.get("killerId"), e.get("victimId")] + e.get("assistingParticipantIds", []): ev.append(["abate" if e.get("killerId") == pid else "morreu" if e.get("victimId") == pid else "assist", e["timestamp"] // 1000, [champs.get(e.get("killerId"), ["?"])[0], champs.get(e.get("victimId"), ["?"])[0]]])
+            elif e["type"] == "WARD_PLACED" and e.get("creatorId") == pid: ev.append(["ward", e["timestamp"] // 1000, e.get("wardType")])
             elif e["type"] == "WARD_KILL" and e.get("killerId") == pid: ev.append(["limpou", e["timestamp"] // 1000, e.get("wardType")])
             elif e["type"] == "ITEM_PURCHASED" and e.get("participantId") == pid: ev.append(["comprou", e["timestamp"] // 1000, e.get("itemId")])
             elif e["type"] == "ITEM_UNDO" and e.get("participantId") == pid: ev.append(["desfez", e["timestamp"] // 1000, e.get("beforeId")])
     out[mid] = {"who": rid, "team": me["teamId"], "champ": me["championName"], "champs": champs,
-                "stats": {k: me.get(k) for k in ("wardsPlaced", "wardsKilled", "visionWardsBoughtInGame", "visionScore", "detectorWardsPlaced")},
+                "stats": {k: me.get(k) for k in ("kills", "deaths", "assists", "totalDamageDealtToChampions", "timePlayed", "wardsPlaced", "wardsKilled", "visionWardsBoughtInGame", "visionScore", "detectorWardsPlaced")},
                 "events": ev}
 json.dump(out, open(outp, "w"), ensure_ascii=False, indent=0)
 print(json.dumps({k: v["stats"] for k, v in out.items()}))
