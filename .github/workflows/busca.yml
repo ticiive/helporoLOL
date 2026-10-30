@@ -32,7 +32,7 @@ jobs:
           J="${JOGADOR:-$(head -n1 model/busca.txt)}"
           python model/played_with.py "ticiive#lett" "$J" out/busca/resultado.json
           cat out/busca/resultado.json >> "$GITHUB_STEP_SUMMARY"
-          python model/champ_count.py "ticiive#lett" 2026-09-10 out/busca/conta.json
+          python model/champ_count.py "ticiive#lett" 2026-10-01 out/busca/conta.json
       - name: Publica na branch busca
         run: |
           set -e

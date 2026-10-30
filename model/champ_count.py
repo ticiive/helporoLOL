@@ -1,4 +1,4 @@
-"""Quantas partidas de solo/duo você jogou com cada campeão desde uma data (pra conferir rankings de sites).
+"""Quantas partidas (por patch) de solo/duo você jogou com cada campeão desde uma data (pra conferir rankings de sites).
 
 Uso: RIOT_API_KEY=... python model/champ_count.py "ticiive#lett" 2026-09-24 out/conta.json
 """
