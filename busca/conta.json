@@ -1,0 +1,506 @@
+{
+ "since": "2026-10-01",
+ "total": 68,
+ "byPatch": {
+  "16.19": {
+   "Soraka": 4,
+   "Yuumi": 2,
+   "Malzahar": 1
+  },
+  "16.20": {
+   "Soraka": 12,
+   "Bard": 5,
+   "Sona": 5,
+   "Malzahar": 4,
+   "Lux": 1,
+   "Lulu": 1,
+   "Nami": 1
+  },
+  "16.21": {
+   "Sona": 9,
+   "Soraka": 7,
+   "Nami": 6,
+   "Yuumi": 4,
+   "Milio": 4,
+   "Seraphine": 2
+  }
+ },
+ "games": [
+  {
+   "t": 1793322027565,
+   "patch": "16.21",
+   "champ": "Sona",
+   "win": false,
+   "min": 25.6
+  },
+  {
+   "t": 1793240903149,
+   "patch": "16.21",
+   "champ": "Sona",
+   "win": false,
+   "min": 24.0
+  },
+  {
+   "t": 1793230865895,
+   "patch": "16.21",
+   "champ": "Sona",
+   "win": true,
+   "min": 27.3
+  },
+  {
+   "t": 1793228586625,
+   "patch": "16.21",
+   "champ": "Sona",
+   "win": true,
+   "min": 22.8
+  },
+  {
+   "t": 1793225224289,
+   "patch": "16.21",
+   "champ": "Sona",
+   "win": true,
+   "min": 28.9
+  },
+  {
+   "t": 1793075774650,
+   "patch": "16.21",
+   "champ": "Sona",
+   "win": false,
+   "min": 31.8
+  },
+  {
+   "t": 1793073058138,
+   "patch": "16.21",
+   "champ": "Sona",
+   "win": true,
+   "min": 29.4
+  },
+  {
+   "t": 1792966858936,
+   "patch": "16.21",
+   "champ": "Nami",
+   "win": false,
+   "min": 26.1
+  },
+  {
+   "t": 1792961761583,
+   "patch": "16.21",
+   "champ": "Soraka",
+   "win": false,
+   "min": 31.8
+  },
+  {
+   "t": 1792959235724,
+   "patch": "16.21",
+   "champ": "Yuumi",
+   "win": false,
+   "min": 29.4
+  },
+  {
+   "t": 1792953303718,
+   "patch": "16.21",
+   "champ": "Sona",
+   "win": false,
+   "min": 24.3
+  },
+  {
+   "t": 1792886532198,
+   "patch": "16.21",
+   "champ": "Milio",
+   "win": true,
+   "min": 34.3
+  },
+  {
+   "t": 1792883955561,
+   "patch": "16.21",
+   "champ": "Milio",
+   "win": false,
+   "min": 32.8
+  },
+  {
+   "t": 1792873096251,
+   "patch": "16.21",
+   "champ": "Nami",
+   "win": false,
+   "min": 24.1
+  },
+  {
+   "t": 1792819525103,
+   "patch": "16.21",
+   "champ": "Sona",
+   "win": true,
+   "min": 38.4
+  },
+  {
+   "t": 1792817178653,
+   "patch": "16.21",
+   "champ": "Milio",
+   "win": false,
+   "min": 32.3
+  },
+  {
+   "t": 1792814963194,
+   "patch": "16.21",
+   "champ": "Nami",
+   "win": true,
+   "min": 25.0
+  },
+  {
+   "t": 1792812329323,
+   "patch": "16.21",
+   "champ": "Seraphine",
+   "win": true,
+   "min": 25.7
+  },
+  {
+   "t": 1792809950626,
+   "patch": "16.21",
+   "champ": "Soraka",
+   "win": true,
+   "min": 1.4
+  },
+  {
+   "t": 1792807472007,
+   "patch": "16.21",
+   "champ": "Nami",
+   "win": true,
+   "min": 28.4
+  },
+  {
+   "t": 1792740207351,
+   "patch": "16.21",
+   "champ": "Soraka",
+   "win": true,
+   "min": 19.1
+  },
+  {
+   "t": 1792739581664,
+   "patch": "16.21",
+   "champ": "Yuumi",
+   "win": true,
+   "min": 1.2
+  },
+  {
+   "t": 1792737430476,
+   "patch": "16.21",
+   "champ": "Yuumi",
+   "win": true,
+   "min": 28.4
+  },
+  {
+   "t": 1792734436277,
+   "patch": "16.21",
+   "champ": "Soraka",
+   "win": false,
+   "min": 27.5
+  },
+  {
+   "t": 1792732162649,
+   "patch": "16.21",
+   "champ": "Milio",
+   "win": true,
+   "min": 28.4
+  },
+  {
+   "t": 1792729660409,
+   "patch": "16.21",
+   "champ": "Nami",
+   "win": true,
+   "min": 26.5
+  },
+  {
+   "t": 1792721509252,
+   "patch": "16.21",
+   "champ": "Soraka",
+   "win": false,
+   "min": 24.0
+  },
+  {
+   "t": 1792715659855,
+   "patch": "16.21",
+   "champ": "Nami",
+   "win": false,
+   "min": 25.0
+  },
+  {
+   "t": 1792711870334,
+   "patch": "16.21",
+   "champ": "Yuumi",
+   "win": true,
+   "min": 15.3
+  },
+  {
+   "t": 1792711281035,
+   "patch": "16.21",
+   "champ": "Seraphine",
+   "win": false,
+   "min": 1.1
+  },
+  {
+   "t": 1792701831881,
+   "patch": "16.21",
+   "champ": "Soraka",
+   "win": true,
+   "min": 32.3
+  },
+  {
+   "t": 1792642127029,
+   "patch": "16.21",
+   "champ": "Soraka",
+   "win": true,
+   "min": 26.2
+  },
+  {
+   "t": 1792554034012,
+   "patch": "16.20",
+   "champ": "Bard",
+   "win": false,
+   "min": 23.2
+  },
+  {
+   "t": 1792551524840,
+   "patch": "16.20",
+   "champ": "Bard",
+   "win": true,
+   "min": 29.2
+  },
+  {
+   "t": 1792549185483,
+   "patch": "16.20",
+   "champ": "Soraka",
+   "win": false,
+   "min": 26.2
+  },
+  {
+   "t": 1792544847035,
+   "patch": "16.20",
+   "champ": "Lux",
+   "win": false,
+   "min": 21.4
+  },
+  {
+   "t": 1792542584866,
+   "patch": "16.20",
+   "champ": "Bard",
+   "win": true,
+   "min": 28.1
+  },
+  {
+   "t": 1792468669035,
+   "patch": "16.20",
+   "champ": "Soraka",
+   "win": false,
+   "min": 41.9
+  },
+  {
+   "t": 1792466267452,
+   "patch": "16.20",
+   "champ": "Sona",
+   "win": true,
+   "min": 29.4
+  },
+  {
+   "t": 1792464274991,
+   "patch": "16.20",
+   "champ": "Sona",
+   "win": false,
+   "min": 25.6
+  },
+  {
+   "t": 1792463644458,
+   "patch": "16.20",
+   "champ": "Sona",
+   "win": true,
+   "min": 1.3
+  },
+  {
+   "t": 1792378511980,
+   "patch": "16.20",
+   "champ": "Sona",
+   "win": true,
+   "min": 36.5
+  },
+  {
+   "t": 1792374042612,
+   "patch": "16.20",
+   "champ": "Bard",
+   "win": true,
+   "min": 35.2
+  },
+  {
+   "t": 1792373145935,
+   "patch": "16.20",
+   "champ": "Malzahar",
+   "win": false,
+   "min": 1.2
+  },
+  {
+   "t": 1792370001818,
+   "patch": "16.20",
+   "champ": "Lulu",
+   "win": true,
+   "min": 33.0
+  },
+  {
+   "t": 1792357508156,
+   "patch": "16.20",
+   "champ": "Bard",
+   "win": false,
+   "min": 29.8
+  },
+  {
+   "t": 1791594638017,
+   "patch": "16.20",
+   "champ": "Malzahar",
+   "win": false,
+   "min": 23.5
+  },
+  {
+   "t": 1791593330009,
+   "patch": "16.20",
+   "champ": "Soraka",
+   "win": false,
+   "min": 16.1
+  },
+  {
+   "t": 1791591277873,
+   "patch": "16.20",
+   "champ": "Nami",
+   "win": false,
+   "min": 27.4
+  },
+  {
+   "t": 1791589351267,
+   "patch": "16.20",
+   "champ": "Soraka",
+   "win": true,
+   "min": 26.3
+  },
+  {
+   "t": 1791586105808,
+   "patch": "16.20",
+   "champ": "Sona",
+   "win": false,
+   "min": 33.0
+  },
+  {
+   "t": 1791583499115,
+   "patch": "16.20",
+   "champ": "Soraka",
+   "win": false,
+   "min": 35.7
+  },
+  {
+   "t": 1791581084846,
+   "patch": "16.20",
+   "champ": "Soraka",
+   "win": true,
+   "min": 29.5
+  },
+  {
+   "t": 1791508410965,
+   "patch": "16.20",
+   "champ": "Soraka",
+   "win": false,
+   "min": 23.6
+  },
+  {
+   "t": 1791505989137,
+   "patch": "16.20",
+   "champ": "Soraka",
+   "win": true,
+   "min": 26.9
+  },
+  {
+   "t": 1791428313948,
+   "patch": "16.20",
+   "champ": "Soraka",
+   "win": false,
+   "min": 30.8
+  },
+  {
+   "t": 1791426815237,
+   "patch": "16.20",
+   "champ": "Soraka",
+   "win": true,
+   "min": 19.3
+  },
+  {
+   "t": 1791424734341,
+   "patch": "16.20",
+   "champ": "Malzahar",
+   "win": false,
+   "min": 29.1
+  },
+  {
+   "t": 1791423068841,
+   "patch": "16.20",
+   "champ": "Malzahar",
+   "win": true,
+   "min": 22.9
+  },
+  {
+   "t": 1791421913483,
+   "patch": "16.20",
+   "champ": "Soraka",
+   "win": true,
+   "min": 10.9
+  },
+  {
+   "t": 1791420318371,
+   "patch": "16.20",
+   "champ": "Soraka",
+   "win": false,
+   "min": 15.1
+  },
+  {
+   "t": 1790904989575,
+   "patch": "16.19",
+   "champ": "Soraka",
+   "win": false,
+   "min": 26.7
+  },
+  {
+   "t": 1790902621590,
+   "patch": "16.19",
+   "champ": "Malzahar",
+   "win": true,
+   "min": 31.4
+  },
+  {
+   "t": 1790900737524,
+   "patch": "16.19",
+   "champ": "Soraka",
+   "win": true,
+   "min": 16.7
+  },
+  {
+   "t": 1790898774256,
+   "patch": "16.19",
+   "champ": "Soraka",
+   "win": true,
+   "min": 25.4
+  },
+  {
+   "t": 1790896499149,
+   "patch": "16.19",
+   "champ": "Soraka",
+   "win": false,
+   "min": 32.1
+  },
+  {
+   "t": 1790823483611,
+   "patch": "16.19",
+   "champ": "Yuumi",
+   "win": false,
+   "min": 37.5
+  },
+  {
+   "t": 1790821381259,
+   "patch": "16.19",
+   "champ": "Yuumi",
+   "win": false,
+   "min": 26.0
+  }
+ ]
+}
